@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /auth/
+Disallow: /login
+Disallow: /dashboard
+Disallow: /workspaces/
+Disallow: /admin
+
+Sitemap: https://panel.readmin.app/sitemap.xml

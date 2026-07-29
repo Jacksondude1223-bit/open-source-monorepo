@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../PublicFrontEnd"
+		},
+		{
+			"path": "../../../game-sync"
+		},
+		{
+			"path": "../../../docs"
+		}
+	],
+	"settings": {
+		"typescript.tsdk": "node_modules/typescript/lib"
+	}
+}

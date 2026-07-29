@@ -1,0 +1,51 @@
+{
+    "ts-node": {
+        "require": [
+            "tsconfig-paths/register"
+        ]
+    },
+    "compilerOptions": {
+        "target": "es2025",
+        "lib": [
+            "ESNext"
+        ],
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "allowJs": true,
+        "checkJs": false,
+        "skipLibCheck": true,
+        "strict": true,
+        "strictNullChecks": true,
+        "strictPropertyInitialization": false,
+        "forceConsistentCasingInFileNames": false,
+        "noEmit": false,
+        "esModuleInterop": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "resolveJsonModule": true,
+        "noUncheckedIndexedAccess": true,
+        "isolatedModules": true,
+        "incremental": true,
+        "outDir": "../../apiBuild",
+        "rootDir": "../../src",
+        "paths": {
+            "~/*": [
+                "../../src/*"
+            ]
+        }
+    },
+    "include": [
+        "next-env.d.ts",
+        "**/*.ts",
+        "**/*.tsx",
+        "./*.js",
+        "./src/**/*.js",
+        "next-env.d.ts",
+        "**/*.ts",
+        "**/*.tsx",
+        ".next/types/**/*.ts",
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
