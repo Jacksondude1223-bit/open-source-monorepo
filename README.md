@@ -23,8 +23,10 @@ Read in order — each section assumes the previous one. Skip to §4 if you only
 4. [Local development](#4-local-development) — `.env`, then three commands.
 5. [Deploying](#5-deploying-to-digitalocean-app-platform) — three App Platform components.
 6. [Hardcoded values to change](#6-hardcoded-values-you-must-change-when-self-hosting) — ⚠️ easy to
-   miss and the deployment silently misbehaves without it.
-7. [Post-deploy checklist](#7-post-deploy-checklist) — ten checks that prove it works.
+   miss and the deployment silently misbehaves without it. Includes
+   [the Roblox modules](#61-the-in-game-roblox-modules), which you must republish under your own
+   account before anything works **in-game**.
+7. [Post-deploy checklist](#7-post-deploy-checklist) — eleven checks that prove it works.
 8. [Security notes](#8-security-notes) · 9. [Licence](#9-licence) — noncommercial use only.
 
 Budget a few hours: most of it is waiting on managed databases to provision and on Roblox/Discord
@@ -49,6 +51,9 @@ same `src/services` layer and therefore need the same environment.
   `/activity`, `/games`, `/ranking`, `/sessions`, `/staff`, `/teams`, `/time-off`, `/users`,
   `/applications`, `/calls`, `/promotion-requests`, `/v2` — see
   [routers/index.ts](src/fastifyAPI/routers/index.ts).
+- Calling that surface is a **fourth component you deploy separately**: the Roblox modules in
+  [modules/](modules/), published to Roblox rather than to your server. They are what run inside each
+  game, and they carry your API's hostname baked in — see [§6.1](#61-the-in-game-roblox-modules).
 - Two webhook receivers live on the API: `POST /internal/discord` (Discord interactions) and
   `POST /internal/billing` (Stripe).
 - The sync worker registers Discord slash commands on boot, then runs every-minute jobs (session
@@ -385,6 +390,7 @@ ReAdmin's own infrastructure — until they are edited.
 | [fastifyAPI/index.ts:28-36](src/fastifyAPI/index.ts#L28-L36) | CORS allowlist | Your panel domain must be listed or every request is blocked. |
 | [next.config.js:48](next.config.js#L48) | Content-Security-Policy allowlist | Add your panel/API/CDN domains or the browser blocks your own assets and API calls. |
 | [login/index.tsx:68](src/pages/login/index.tsx#L68), [workspaces/create/index.tsx:426](src/pages/workspaces/create/index.tsx#L426), [settings/integrations/index.tsx:115](src/pages/workspaces/%5BgroupId%5D/settings/integrations/index.tsx#L115) and `:214` | Roblox OAuth `client_id=8369795969584799403` | The authorize URL is built client-side with ReAdmin's client ID; swap in yours (it must match `ROBLOX_CLIENT_ID`). Login fails until you do. |
+| [downloads/index.tsx:2528](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2528) and [:2903](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2903) | `require()` asset IDs for the two in-game Roblox modules | Nothing in-game works until you publish your own copies. **See §6.1** — this one is a Studio job, not a code edit. |
 
 **Blank placeholders — fill in only if you want the feature:**
 
@@ -400,6 +406,51 @@ ReAdmin's own infrastructure — until they are edited.
 | --- | --- | --- |
 | [stripe.service.ts:11-13](src/services/stripe.service.ts#L11-L13) | Stripe product and price IDs | Tied to ReAdmin's Stripe account; billing cannot work with them under your own keys. Signups are closed while `READMIN_IS_SHUTTING_DOWN` is true, so this is inert by default. |
 | `https://cdn.readmin.app/...` literals across `src/pages` and `src/server` | Default avatars, logos, in-game preview images | Point at your own bucket if you don't want to depend on ReAdmin's CDN staying up. |
+
+### 6.1 The in-game Roblox modules
+
+Do this once the panel is deployed and you can log in — everything below needs your API's real
+hostname.
+
+Half of ReAdmin runs inside Roblox, and that half is **not** deployed with the rest of the app. The
+`.rbxm` sources live in [modules/](modules/):
+
+| File | Published as | Referenced from |
+| --- | --- | --- |
+| [Activity Tracker.rbxm](modules/) | `require(13742588012)` | [downloads/index.tsx:2903](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2903) |
+| [Application Center.rbxm](modules/) | `require(90428048416593)` | [downloads/index.tsx:2528](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2528) |
+
+**How the pieces fit together.** A workspace owner downloads a loader from
+`/workspaces/<groupId>/settings/downloads`. The panel generates that file on the fly and bakes in two
+things: the workspace's `loaderId` (its API credential — injected automatically, nothing to change)
+and a `require(<assetId>)` pointing at a **published Roblox model**. That model is where the actual
+tracker code lives, and **the API base URL is hardcoded inside it**. Today those asset IDs resolve to
+ReAdmin's models, which call `api.readmin.app`.
+
+So a self-hosted instance fails in a quiet way: the panel works, owners can download loaders, and
+every in-game request goes to ReAdmin's API — which rejects it, because it has never heard of your
+`loaderId`. Nothing crashes; the tracker just never records anything.
+
+Fixing it is a four-step loop per module:
+
+1. **Import** the `.rbxm` into Roblox Studio (right-click a service → *Insert from File*).
+2. **Repoint the URL.** Find the hardcoded API base inside the module's scripts and change it to your
+   own `https://api.<your-domain>`. Search the scripts for `readmin` — `Activity Tracker` ships
+   pointing at `api.readmin.app` and `Application Center` at `api.readmin.dev`. Confirm you've caught
+   every occurrence before publishing; these are compiled models, so grepping the file from outside
+   Studio will not reliably find them all.
+3. **Publish to Roblox** (right-click the model → *Publish to Roblox*) and copy the new asset ID from
+   its library URL. Set the model's **Distribute on Creator Store** / sharing so your games can
+   `require()` it — a private model only loads in places owned by the same account or group.
+4. **Swap the ID** into the matching `require(...)` in
+   [downloads/index.tsx](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx), then
+   redeploy the panel so freshly generated loaders point at your model.
+
+Loaders downloaded before the swap keep the old asset ID baked in — after changing it, anyone who
+already installed one needs to re-download from the same page and replace the script in their game.
+
+> **`require()` by asset ID only works in a published place with HTTP requests enabled.** Test in a
+> real published game, not in Studio's local play mode, or you'll be debugging the wrong problem.
 
 ---
 
@@ -421,6 +472,10 @@ ReAdmin's own infrastructure — until they are edited.
    `/workspaces/<groupId>/settings/data-export`.
 10. Spot-check that the indexes landed: `db.workspace.getIndexes()` should show `loaderId_1`, and
     `db.group_member.getIndexes()` should show several `idx_*` names.
+11. **End-to-end the in-game half** (§6.1): download a loader from
+    `/workspaces/<groupId>/settings/downloads`, drop it into a published test place, join, and
+    confirm the session shows up under the workspace's activity. If the panel is healthy but this
+    step records nothing, you are almost certainly still pointing at ReAdmin's published modules.
 
 ---
 
