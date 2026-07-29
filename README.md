@@ -442,7 +442,7 @@ Operational notes for anyone running an instance:
 ## 9. Licence
 
 ReAdmin is source-available under the **PolyForm Noncommercial License 1.0.0** — see
-[LICENSE.md](LICENSE.md). Copyright © 2026 Matthew Walden.
+[LICENSE.md](LICENSE.md). Copyright © 2026 ReAdmin, LLC.
 
 You may use, modify, and share it for any **noncommercial** purpose, including running your own
 instance for your own Roblox group. Using it for commercial advantage or monetary compensation —
