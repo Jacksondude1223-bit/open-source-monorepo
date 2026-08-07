@@ -218,6 +218,16 @@ if command -v git >/dev/null 2>&1 && git -C "$APP_DIR" rev-parse --git-dir >/dev
   note "If a prompt below is missing, you are on an older commit: git pull, then re-run."
 fi
 
+# A second checkout nested inside this one is almost always an accidental
+# re-clone. The build no longer typechecks it (tsconfig scopes itself to src/),
+# but it is still a stale copy someone will eventually edit by mistake.
+while IFS= read -r stray; do
+  [[ -z "$stray" ]] && continue
+  warn "Stray checkout at ${stray%/package.json} — a duplicate clone inside this one."
+  note "Nothing reads it. Remove it once you have checked it holds no local edits."
+done < <(find "$APP_DIR" -mindepth 2 -maxdepth 3 -name package.json -not -path '*/node_modules/*' 2>/dev/null \
+  | xargs -r grep -l '"name": *"readmin"' 2>/dev/null)
+
 if [[ -z "$SERVICE_USER" ]]; then
   SERVICE_USER="$(stat -c '%U' "$APP_DIR")"
   # A root-owned checkout would mean running the services as root; prefer the
