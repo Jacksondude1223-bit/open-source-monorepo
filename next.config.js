@@ -16,6 +16,25 @@ function getConfig(config) {
 }
 
 /**
+ * The panel's Content-Security-Policy. A self-hosted deployment appends its own
+ * panel / API / CDN hosts through CSP_EXTRA_DOMAINS (space separated), otherwise
+ * the browser blocks its own assets and API calls.
+ */
+function contentSecurityPolicy() {
+  const sources = [
+    "default-src 'self' 'unsafe-eval'",
+    'readmin.app s3.amazonaws.com/cdn.readmin.app/ cdn.readmin.app localhost:3001',
+    '*.readmin.dev *.readmin.app localhost *.readmin.app',
+    '*.roblox.com *.robloxlabs.com *.rbxcdn.com',
+    '*.discordapp.com *.discord.com rsms.me *.posthog.com',
+    '*.googletagmanager.com *.google-analytics.com *.gstatic.com *.googleapis.com *.google',
+    (env.CSP_EXTRA_DOMAINS || '').trim(),
+    "'unsafe-inline' blob: data:",
+  ];
+  return `${sources.filter(Boolean).join(' ')};`;
+}
+
+/**
  * @link https://nextjs.org/docs/api-reference/next.config.js/introduction
  */
 module.exports = getConfig({
@@ -34,6 +53,9 @@ module.exports = getConfig({
     VERCEL_ENV: env.VERCEL_ENV,
     DISCORD_CLIENT_ID: env.DISCORD_CLIENT_ID,
     NEXT_PUBLIC_VERCEL_GIT_COMMIT_MESSAGE: env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_MESSAGE,
+    NEXT_PUBLIC_PANEL_URL: env.NEXT_PUBLIC_PANEL_URL,
+    NEXT_PUBLIC_API_URL: env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_ROBLOX_CLIENT_ID: env.NEXT_PUBLIC_ROBLOX_CLIENT_ID,
   },
   async headers() {
     return [
@@ -46,7 +68,7 @@ module.exports = getConfig({
           },
           {
             key: 'Content-Security-Policy',
-            value: "default-src 'self' 'unsafe-eval' readmin.app s3.amazonaws.com/cdn.readmin.app/ cdn.readmin.app localhost:3001 *.readmin.dev *.readmin.app localhost *.readmin.app *.roblox.com *.robloxlabs.com *.rbxcdn.com *.discordapp.com *.discord.com rsms.me *.posthog.com *.googletagmanager.com *.google-analytics.com *.gstatic.com *.googleapis.com *.google 'unsafe-inline' blob: data:;"
+            value: contentSecurityPolicy()
           }
         ],
       },

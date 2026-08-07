@@ -11,6 +11,15 @@ export function getBaseUrl(forSite: boolean = true) {
   const isClient = typeof window !== 'undefined';
   const env: 'unknown' | 'production' | 'preview' | 'development' = (process.env
     .NEXT_PUBLIC_VERCEL_ENV || 'unknown') as any;
+  // A self-hosted deployment names its own hostnames, which beat the readmin.app
+  // defaults below whatever NEXT_PUBLIC_VERCEL_ENV says. Inlined at build time,
+  // so these must be present when `next build` runs — install.sh handles that.
+  const configured = forSite
+    ? process.env.NEXT_PUBLIC_PANEL_URL
+    : process.env.NEXT_PUBLIC_API_URL;
+  if (configured) {
+    return configured.replace(/\/+$/, '');
+  }
   if (forSite) {
     return {
       unknown: isClient ? window.location.origin : `http://localhost:${process.env.PORT ?? 3000}`,

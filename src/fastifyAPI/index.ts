@@ -25,8 +25,15 @@ export const fastify = Fastify({
     bodyLimit: 25 * 1024 * 1024, // 10 MB
     // http2: true,
 })
+// A self-hosted deployment lists its own panel origin(s) in CORS_ORIGINS, which
+// replaces the readmin.app allowlist below entirely.
+const configuredOrigins = (env.CORS_ORIGINS || '')
+    .split(',')
+    .map((origin: string) => origin.trim())
+    .filter(Boolean);
+
 fastify.register(cors, {
-    origin: {
+    origin: configuredOrigins.length ? configuredOrigins : {
         test: ['http://localhost:3000'],
         preview: ['http://localhost:3000'],
         development: ['https://readmin.dev', 'https://panel.readmin.dev', 'http://localhost:3000'],
