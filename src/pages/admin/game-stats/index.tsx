@@ -5,7 +5,7 @@ import {
     LineChart,
     PieChart
 } from '@mui/x-charts';
-import { DataGridPro, GridColDef, GridToolbar } from '@mui/x-data-grid-pro';
+import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import {
     ChartBarIcon,
     UsersIcon,
@@ -594,7 +594,7 @@ export default function GameStatsPage() {
                                 <div className="mt-6">
                                     <h4 className="text-md font-semibold text-gray-900 dark:text-white mb-4">Detailed Workspace Activity</h4>
                                     <div style={{ height: 400, width: '100%' }}>
-                                        <DataGridPro
+                                        <DataGrid
                                             rows={workspaceActivityStats.workspaces.map((ws, index) => ({
                                                 id: index,
                                                 ...ws,
@@ -918,7 +918,7 @@ export default function GameStatsPage() {
                         isLoading={topGamesLoading}
                     >
                         <div style={{ height: 400, width: '100%' }}>
-                            <DataGridPro
+                            <DataGrid
                                 rows={topGames?.map((game, index) => ({ id: index, ...game })) || []}
                                 columns={topGamesColumns}
                                 slots={{ toolbar: GridToolbar }}
@@ -976,7 +976,7 @@ export default function GameStatsPage() {
                         description="Live feed of recent gameplay sessions showing duration, platform, and activity levels. Activity % shows how engaged players were during their session."
                         isLoading={recentActivityLoading}
                     >                        <div style={{ height: 500, width: '100%' }}>
-                            <DataGridPro
+                            <DataGrid
                                 rows={recentActivity?.map((session: any, index: number) => ({ id: index, ...session })) || []}
                                 columns={recentActivityColumns}
                                 slots={{ toolbar: GridToolbar }}

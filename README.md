@@ -235,43 +235,43 @@ longer read anywhere in `src/` — set any non-empty placeholder:
 
 `ROBLOX_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `CONTIGUITY_SECRET`
 
-### 2.4 MUI X Pro — a paid, non-transferable licence
+### 2.4 MUI — no licence needed
 
-The panel depends on three **commercial** MUI packages:
+The panel's UI is [MUI](https://mui.com), which is **free and MIT licensed**. Nothing here needs a
+paid key, and no watermark appears.
 
-- `@mui/x-data-grid-pro` — the data grid behind the member, activity, and admin tables
-- `@mui/x-charts-pro` — dashboard charts
-- `@mui/x-date-pickers-pro` — the date-range pickers
+It did once. The panel used to depend on three *commercial* packages — `@mui/x-data-grid-pro`,
+`@mui/x-charts-pro` and `@mui/x-date-pickers-pro` — and shipped with an empty
+`LicenseInfo.setLicenseKey('')`, so grids rendered watermarked with a console error until you bought
+your own licence. MUI X licences are per developer and not sublicensable, so a self-hosted
+deployment could not lawfully have used ReAdmin's key anyway.
 
-**No licence key ships with this source.** The call at
-[_app.tsx:119](src/pages/_app.tsx#L119) is `LicenseInfo.setLicenseKey('')` — ReAdmin's own key was
-removed before publishing. MUI X licences are sold per developer and are not sublicensable, so a
-self-hosted deployment could not lawfully have used it anyway.
+Those are gone. The panel now uses only the free tier:
 
-> ⚠️ **Out of the box the grids render with a watermark and a console error.** That is the
-> unlicensed state, not a bug. Pick one of the options below before putting the panel in front of
-> users.
+| Was | Now |
+| --- | --- |
+| `@mui/x-data-grid-pro` | `@mui/x-data-grid` |
+| `@mui/x-date-pickers-pro` | `@mui/x-date-pickers` |
+| `@mui/x-charts-pro` | `@mui/x-charts` — it was already unused, every chart imported the free package |
 
-Self-hosters have three options:
+Two Pro-only features were in use and were rebuilt rather than dropped:
 
-1. **Buy your own MUI X Pro licence** ([mui.com/pricing](https://mui.com/pricing)) and set the
-   key at [_app.tsx:119](src/pages/_app.tsx#L119).
-2. **Downgrade to the free packages** — swap `@mui/x-data-grid-pro` → `@mui/x-data-grid`,
-   `@mui/x-charts-pro` → `@mui/x-charts`, `@mui/x-date-pickers-pro` → `@mui/x-date-pickers`, then
-   drop the `LicenseInfo` call. This costs the Pro-only features those six files use — column
-   pinning/grouping, tree data, and the date-*range* pickers, which have no free equivalent and need
-   replacing with two single date pickers. Affected files:
-   [DateBetweenPicker.tsx](src/components/ui/DateBetweenPicker.tsx),
-   [admin/workspaces](src/pages/admin/workspaces/index.tsx),
-   [admin/game-stats](src/pages/admin/game-stats/index.tsx),
-   [settings/ranking-api](src/pages/workspaces/%5BgroupId%5D/settings/ranking-api/index.tsx),
-   [users/logging](src/pages/workspaces/%5BgroupId%5D/users/%5BuserId%5D/logging/index.tsx).
-3. **Run unlicensed** — the current default. The components still render, but with a watermark over
-   the grid and a console error. Not a viable option for anything user-facing, and a breach of MUI's
-   terms.
+- **The date-*range* picker** ([DateBetweenPicker.tsx](src/components/ui/DateBetweenPicker.tsx)) has
+  no free equivalent. It is now two ordinary date pickers; the end date will not accept a day before
+  the start. Consumers are unaffected — the component still exposes the same hidden `#startdate` and
+  `#enddate` inputs.
+- **The master-detail evidence panel** on
+  [users/logging](src/pages/workspaces/%5BgroupId%5D/users/%5BuserId%5D/logging/index.tsx) —
+  expandable detail rows are paid. Evidence is now an **Evidence** column showing the attachment
+  count, which opens the same attachments in a dialog.
 
-Note that `@mui/x-data-grid` and `@mui/x-data-grid-pro` are both listed in `transpilePackages` in
-[next.config.js](next.config.js), so option 2 needs no build-config change.
+No Pro-only grid features (column pinning, row grouping, tree data) were used, so the four grids
+carried over unchanged beyond the component name.
+
+If you would rather have the Pro components back, buy a licence at
+[mui.com/pricing](https://mui.com/pricing), reinstall the three `-pro` packages, and restore the
+`LicenseInfo.setLicenseKey(...)` call in [_app.tsx](src/pages/_app.tsx). You do not need to: the free
+tier is a complete panel.
 
 ---
 
@@ -462,7 +462,6 @@ or `npm run build`) — restarting the services is not enough.
 | --- | --- | --- |
 | [discord.service.ts:285](src/services/discord.service.ts#L285) | Internal Discord logging webhooks (billing, distributions, game errors, image uploads, …) | Redacted to `''`. Every send fails harmlessly until you supply your own webhook URLs. Unrelated to the per-workspace logging webhooks users configure in the UI. |
 | [posthog.service.ts:3](src/services/posthog.service.ts#L3) | PostHog project API key | Redacted to `''`, so no analytics are sent. Add your own project key or delete the client. |
-| [_app.tsx:119](src/pages/_app.tsx#L119) | MUI X Pro licence key | Empty — grids render watermarked until you supply a licence. See §2.4. |
 
 **Only matters if you enable billing:**
 
@@ -572,8 +571,8 @@ requires a separate agreement.
 
 Two things this licence does *not* cover:
 
-- **Third-party dependencies**, which are licensed by their own authors. Most notably the MUI X Pro
-  packages are commercial software needing a licence bought from MUI — no key ships with this
-  source. See §2.4.
+- **Third-party dependencies**, which are licensed by their own authors. All of them are free to
+  use — the panel deliberately stays on MUI's MIT-licensed tier and needs no purchased key. See
+  §2.4.
 - **Redistribution obligations.** If you pass ReAdmin on, PolyForm requires you to include these
   terms and the `Required Notice:` line from [LICENSE.md](LICENSE.md) with it.

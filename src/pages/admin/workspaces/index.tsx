@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { ArrayToValueType, RouterOutput } from '~/server/routers/_app';
 import RobloxUserSearch from '~/components/ui/RobloxUserSearch';
 import TextReturnForUserId from '~/components/ui/TextReturnForUserId';
-import { DataGridPro, GridColDef, GridActionsCellItem, GridRowParams, GridToolbarContainer, GridToolbarFilterButton, GridToolbarDensitySelector, GridToolbarExport, GridToolbarColumnsButton } from '@mui/x-data-grid-pro';
+import { DataGrid, GridColDef, GridActionsCellItem, GridRowParams, GridToolbarContainer, GridToolbarFilterButton, GridToolbarDensitySelector, GridToolbarExport, GridToolbarColumnsButton } from '@mui/x-data-grid';
 import { Box, TextField, Chip, Avatar, Typography, IconButton, Tooltip } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 
@@ -408,7 +408,7 @@ export default function DashboardPage() {
         <PageHeading title={`ReAdmin Workspaces (${filteredWorkspaces.length.toLocaleString()})`} />
 
         <Box sx={{ height: 'calc(100vh - 200px)', width: '100%' }}>
-          <DataGridPro
+          <DataGrid
             rows={filteredWorkspaces}
             columns={columns}
             getRowId={(row) => row.groupId}

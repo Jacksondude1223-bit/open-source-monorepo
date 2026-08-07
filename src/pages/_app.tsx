@@ -20,9 +20,8 @@ import '@fortawesome/fontawesome-svg-core/styles.css'
 import { GoogleAnalytics } from '@next/third-parties/google';
 import Head from 'next/head';
 import { createTheme, ThemeProvider, useColorScheme } from '@mui/material';
-import { LicenseInfo } from '@mui/x-license';
-import { LocalizationProvider } from '@mui/x-date-pickers-pro/LocalizationProvider';
-import { AdapterMoment } from '@mui/x-date-pickers-pro/AdapterMoment';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
 import { AppCacheProvider } from '@mui/material-nextjs/v16-pagesRouter';
 
 config.autoAddCss = false
@@ -115,8 +114,6 @@ const MyApp = (({ Component, pageProps }: AppPropsWithLayout) => {
   const darkMode = data?.user?.dbUser?.darkMode == true || false;
   const { setMode } = useColorScheme();
   setMode(darkMode ? 'dark' : 'light');
-  // this is needed
-  LicenseInfo.setLicenseKey('');
 
   // Sync dark mode preference to localStorage so the blocking script in _document.tsx
   // can apply it before first paint on next page load, preventing white flash
