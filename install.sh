@@ -385,7 +385,10 @@ ask_port_var() { # like ask_var, but insists on a TCP port
   done
 }
 
+# Hostname only — for nginx server_name and DNS instructions.
 host_of() { sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#[:/].*$##' <<<"$1"; }
+# Hostname WITH port — for CSP sources, where the port is significant.
+authority_of() { sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#/.*$##' <<<"$1"; }
 
 detect_ip() {
   local ip
@@ -507,11 +510,15 @@ set_var NEXT_PUBLIC_VERCEL_ENV "production"
 set_var SELF_HOSTED "true"
 set_var APP_NAME "panel"
 set_var CORS_ORIGINS "${VALUES[NEXT_PUBLIC_PANEL_URL]}"
-# The CSP needs every host the browser loads from. With local storage that is
-# just the API, which serves the files itself.
-CSP_HOSTS="$(host_of "${VALUES[NEXT_PUBLIC_PANEL_URL]}") $(host_of "${VALUES[NEXT_PUBLIC_API_URL]}")"
-[[ -n "${VALUES[CDN_URL]:-}" ]] && CSP_HOSTS="$CSP_HOSTS $(host_of "${VALUES[CDN_URL]}")"
-set_var CSP_EXTRA_DOMAINS "$CSP_HOSTS"
+# The CSP needs every host the browser loads from, WITH its port: a CSP source
+# without one only matches the scheme's default port, so a bare 1.2.3.4 does not
+# allow http://1.2.3.4:3001 and the panel's own API calls get blocked.
+# next.config.js derives these too; writing them keeps .env self-describing.
+CSP_HOSTS="$(authority_of "${VALUES[NEXT_PUBLIC_PANEL_URL]}") $(authority_of "${VALUES[NEXT_PUBLIC_API_URL]}")"
+[[ -n "${VALUES[CDN_URL]:-}" ]] && CSP_HOSTS="$CSP_HOSTS $(authority_of "${VALUES[CDN_URL]}")"
+# Panel and API often share a host, so drop repeats.
+CSP_HOSTS="$(tr ' ' '\n' <<<"$CSP_HOSTS" | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+set_var CSP_EXTRA_DOMAINS "${CSP_HOSTS% }"
 for placeholder in ROBLOX_SECRET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY CONTIGUITY_SECRET; do
   set_var "$placeholder" "${CURRENT[$placeholder]:-unused}"
 done
