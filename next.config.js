@@ -20,7 +20,37 @@ function getConfig(config) {
  * panel / API / CDN hosts through CSP_EXTRA_DOMAINS (space separated), otherwise
  * the browser blocks its own assets and API calls.
  */
+/**
+ * `host:port` of a URL, as a CSP source.
+ *
+ * The port matters: a CSP host-source with no port only matches its scheme's
+ * default port, so `1.2.3.4` does NOT allow `http://1.2.3.4:3001`. That is why
+ * the built-in list below spells out `localhost:3001`. Dropping the port here
+ * blocks every API call from a deployment served on a non-standard port.
+ *
+ * @param {string | undefined} url
+ * @returns {string}
+ */
+function cspSource(url) {
+  if (!url) return '';
+  try {
+    return new URL(url).host; // `host`, not `hostname` — keeps the port.
+  } catch {
+    return String(url).replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '').replace(/\/.*$/, '');
+  }
+}
+
 function contentSecurityPolicy() {
+  // Derived from the deployment's own URLs rather than left to the operator to
+  // remember: the panel loads from itself, calls the API cross-origin, and pulls
+  // assets from wherever files are served. Getting any of these wrong shows up
+  // as the browser blocking the app's own requests.
+  const ownHosts = [
+    cspSource(env.NEXT_PUBLIC_PANEL_URL),
+    cspSource(env.NEXT_PUBLIC_API_URL),
+    cspSource(env.CDN_URL),
+  ];
+
   const sources = [
     "default-src 'self' 'unsafe-eval'",
     'readmin.app s3.amazonaws.com/cdn.readmin.app/ cdn.readmin.app localhost:3001',
@@ -28,10 +58,25 @@ function contentSecurityPolicy() {
     '*.roblox.com *.robloxlabs.com *.rbxcdn.com',
     '*.discordapp.com *.discord.com rsms.me *.posthog.com',
     '*.googletagmanager.com *.google-analytics.com *.gstatic.com *.googleapis.com *.google',
+    ...ownHosts,
     (env.CSP_EXTRA_DOMAINS || '').trim(),
     "'unsafe-inline' blob: data:",
   ];
-  return `${sources.filter(Boolean).join(' ')};`;
+
+  // Split on whitespace so CSP_EXTRA_DOMAINS' own entries dedupe against the
+  // derived ones — otherwise every host appears twice.
+  const seen = new Set();
+  const parts = sources
+    .filter(Boolean)
+    .join(' ')
+    .split(/\s+/)
+    .filter((part) => {
+      if (!part || seen.has(part)) return false;
+      seen.add(part);
+      return true;
+    });
+
+  return `${parts.join(' ')};`;
 }
 
 /**

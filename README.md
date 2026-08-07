@@ -35,15 +35,26 @@ and registers all three processes as systemd services — `readmin-panel`, `read
 `readmin-sync`. It also writes an nginx config for the two hostnames.
 
 It is safe to re-run: every existing `.env` value comes back as the default, and `CRYPTO_KEY` is
-never regenerated (that would invalidate every stored OAuth token). To update later:
+never regenerated (that would invalidate every stored OAuth token).
+
+**Updating later needs no `git pull`.** The installer checks whether your checkout is behind, shows
+you the commits, and offers to bring itself up to date — then re-runs the *new* version, so what
+installs is what you just pulled:
 
 ```bash
-git pull && sudo ./install.sh --yes
+sudo ./install.sh            # asks before updating
+sudo ./install.sh --update   # updates without asking
 ```
+
+It refuses to touch a checkout with local edits to tracked files, or one that has diverged from the
+remote, and tells you the command to resolve either. Your `.env` is never at risk — it is not
+tracked by git.
 
 | Flag | Effect |
 | --- | --- |
-| `--yes` / `-y` | Accept confirmations; still asks for credentials that have no value yet |
+| `--update` | Pull the latest commit first, without asking, then re-run on it |
+| `--no-update` | Never check the repository for newer commits |
+| `--yes` / `-y` | Accept confirmations, including the update prompt; still asks for credentials that have no value yet |
 | `--env-only` | Run the credential wizard, write `.env`, stop |
 | `--non-interactive` | Never prompt; requires a complete `.env` already. Good for re-deploys |
 | `--skip-node` / `--skip-deps` / `--skip-build` / `--skip-services` | Skip that stage |
