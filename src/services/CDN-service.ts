@@ -1,46 +1,35 @@
-import { GetObjectCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
-import { env } from '~/services/env';
 import { getMimeByExt } from '../utils/File';
-import {
-  getSignedUrl
-} from "@aws-sdk/s3-request-presigner";
 import { readminCollections } from './mongo.service';
+import { storage } from './storage';
+import type { StorageAcl } from './storage';
 
-export const s3Client = new S3({
-  forcePathStyle: false,
-  endpoint: env.CDN_ENDPOINT,
-  region: env.CDN_REIGON,
-  credentials: {
-    accessKeyId: env.CDN_ACCESS_KEY_ID,
-    secretAccessKey: env.CDN_SECRET_ACCESS_KEY,
-  },
-});
-
-export async function uploadImageBuffer(filePath: string, buffer: Buffer, ContentType?: string, permission?: 'private' | 'public-read') {
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: env.CDN_BUCKET_NAME || 'cdn.readmin.app',
-      Key: filePath,
-      Body: buffer,
-      ACL: permission || 'private',
-      ContentType: ContentType || 'image/png',
-      ContentEncoding: 'base64',
-    }),
+/**
+ * Note for anyone comparing against the pre-storage-driver version: that one
+ * also set `ContentEncoding: 'base64'` on the S3 put, while handing S3 an
+ * already-decoded Buffer. The header was simply wrong — the body is raw bytes —
+ * and it is not set any more. Objects uploaded before the change still carry it.
+ */
+export async function uploadImageBuffer(filePath: string, buffer: Buffer, ContentType?: string, permission?: StorageAcl) {
+  await storage.put(
+    filePath,
+    buffer,
+    ContentType || 'image/png',
+    permission || 'private',
   );
 }
 
-export async function uploadImage(filePath: string, fileName: string, fileData: string, permission?: 'private' | 'public-read') {
+export async function uploadImage(filePath: string, fileName: string, fileData: string, permission?: StorageAcl) {
   const buffer = Buffer.from((fileData.split(',') as any)[1], 'base64');
   const ContentType = getMimeByExt(fileName.substring(fileName.length - 3));
   await uploadImageBuffer(filePath, buffer, ContentType, permission);
 }
 
-export async function presignUrl(filePath: string, expiresInSeconds: number) {
-  const command = new GetObjectCommand({
-    Bucket: env.CDN_BUCKET_NAME || 'cdn.readmin.app',
-    Key: filePath,
-  });
+/** A stable URL for an object uploaded with `public-read`. */
+export function publicUrl(filePath: string): string {
+  return storage.publicUrl(filePath);
+}
 
+export async function presignUrl(filePath: string, expiresInSeconds: number) {
   const cached = await readminCollections.image_cache.findOne({
     filePath,
     expires: { $gt: new Date() }
@@ -50,7 +39,7 @@ export async function presignUrl(filePath: string, expiresInSeconds: number) {
     return cached.signedUrl;
   }
 
-  const url = await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
+  const url = await storage.signedUrl(filePath, expiresInSeconds);
 
   await readminCollections.image_cache.insertOne({
     filePath,
@@ -60,8 +49,7 @@ export async function presignUrl(filePath: string, expiresInSeconds: number) {
     created: new Date()
   })
 
-  // console.log(url, `${env.CDN_URL}${url.split('app')[1]}`)
-  return url//`${env.CDN_URL}${url.split('app')[1]}`;
+  return url;
 }
 
 export async function presignArrayOfPaths(paths: string[], expiresInSeconds: number): Promise<string[]> {

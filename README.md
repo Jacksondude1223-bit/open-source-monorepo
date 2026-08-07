@@ -116,7 +116,7 @@ same `src/services` layer and therefore need the same environment.
 | --- | --- | --- | --- |
 | **MongoDB** (DO Managed MongoDB) | **Yes** | Primary datastore — every collection in [mongo.service.ts](src/services/mongo.service.ts#L90) | `MONGODB_URI`, `MONGODB_DATABASE` |
 | **Valkey / Redis** (DO Managed Caching) | **Yes** | Cross-process OAuth refresh locking and caching ([redis.client.ts](src/services/redis.client.ts), [cache.service.ts](src/services/cache.service.ts)) | `REDIS_URL` |
-| **S3-compatible object storage** (DO Spaces) | **Yes** | Uploads: logos, banners, note/feed/session images, workspace export bundles ([CDN-service.ts](src/services/CDN-service.ts)) | `CDN_ENDPOINT`, `CDN_REIGON`, `CDN_BUCKET_NAME`, `CDN_ACCESS_KEY_ID`, `CDN_SECRET_ACCESS_KEY`, `CDN_URL` |
+| **File storage** — this server's disk, or an S3-compatible bucket | **Yes** (disk needs no account) | Uploads: logos, banners, note/feed/session images, workspace export bundles ([storage/](src/services/storage)) | `STORAGE_DRIVER`, then either `STORAGE_LOCAL_PATH` or the `CDN_*` set |
 | **OpenSearch** (DO Managed OpenSearch) | Optional | Fast Roblox user search + in-game chat search. When `OPENSEARCH_URL` is unset every helper is a no-op and callers fall back to MongoDB ([opensearch.service.ts](src/services/opensearch.service.ts)) | `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` |
 
 **MongoDB.** The client forces `ssl: true` / `tls: true`, so the URI must be a TLS-capable
@@ -133,14 +133,36 @@ cost nothing, and there is no script to run. See §2.1.1 for what to check after
 **Valkey/Redis.** Use the `rediss://` scheme for DO's TLS-only managed caching cluster. Keys are
 namespaced `readmin-<NEXT_PUBLIC_VERCEL_ENV>`, so several environments can share one cluster safely.
 
-**Spaces.** Create a bucket and a Spaces access key pair. Objects are written with explicit ACLs
-(`private` by default, `public-read` for public assets) and private objects are served through
-presigned URLs cached in the `image_cache` collection.
+**File storage.** Objects are written with explicit ACLs (`private` by default, `public-read` for
+public assets); private objects are reached through expiring signed URLs cached in the `image_cache`
+collection. `STORAGE_DRIVER` picks where the bytes actually live — the two drivers are in
+[services/storage/](src/services/storage) and nothing above that layer knows the difference.
 
-- `CDN_ENDPOINT` — regional Spaces endpoint, e.g. `https://nyc3.digitaloceanspaces.com`
+*`STORAGE_DRIVER=local` — the VPS's own disk.* No account, no bucket, no bill. This is what
+`install.sh` offers first.
+
+- `STORAGE_LOCAL_PATH` — directory holding the objects, default `/var/lib/readmin/storage`. It gets
+  an `objects/` tree (the bytes, at their key paths) and a `meta/` tree (content type and ACL).
+- The API serves it at `<NEXT_PUBLIC_API_URL>/files`: `/files/signed/<key>` for private objects,
+  carrying an HMAC over the key and expiry, and `/files/public/<key>` for `public-read` ones. A
+  private object is a 404 on the public route, so a guessed key gets nothing.
+- **All three processes must be able to write it.** The panel, API and sync worker all serve tRPC,
+  so all three accept uploads. `install.sh` creates the directory owned by the service user and adds
+  it to each unit's `ReadWritePaths`.
+- **Back it up.** Unlike MongoDB this is not reproducible from anywhere else, and no managed service
+  is replicating it for you.
+
+*`STORAGE_DRIVER=s3` — any S3-compatible bucket* (DO Spaces, Cloudflare R2, MinIO, S3). Create a
+bucket and an access key pair, then set:
+
+- `CDN_ENDPOINT` — regional endpoint, e.g. `https://nyc3.digitaloceanspaces.com`
 - `CDN_REIGON` — the region slug, e.g. `nyc3` (yes, the variable name is misspelled in code)
 - `CDN_BUCKET_NAME` — bucket name; **defaults to `cdn.readmin.app` if unset**, so always set it
-- `CDN_URL` — public base URL used to build asset links (Spaces CDN endpoint or a custom subdomain)
+- `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` — the key pair
+- `CDN_URL` — public base URL used to build asset links (bucket CDN endpoint or a custom subdomain)
+
+Switching drivers does not migrate anything. Moving between them means copying the objects across
+yourself, keeping the same key layout.
 
 **OpenSearch.** Indexes `roblox_users_<NODE_ENV>` and `game_chats_<NODE_ENV>` are created
 automatically on first use. Skip this service entirely for a small instance; search stays functional
@@ -284,11 +306,13 @@ tier is a complete panel.
 | `MONGODB_URI` | ✅ | Must be a valid URL; TLS is forced |
 | `MONGODB_DATABASE` | ✅ | Database name |
 | `REDIS_URL` | ✅ | `rediss://…` for DO managed caching |
-| `CDN_ENDPOINT` | ✅ | e.g. `https://nyc3.digitaloceanspaces.com` |
-| `CDN_REIGON` | ✅ | e.g. `nyc3` (misspelling intentional) |
+| `STORAGE_DRIVER` | Optional | `local` (this server's disk) or `s3` (a bucket). Defaults to `s3` |
+| `STORAGE_LOCAL_PATH` | ✅ when `local` | Directory for uploads, default `/var/lib/readmin/storage`. Must be writable by all three processes |
+| `CDN_ENDPOINT` | ✅ when `s3` | e.g. `https://nyc3.digitaloceanspaces.com` |
+| `CDN_REIGON` | ✅ when `s3` | e.g. `nyc3` (misspelling intentional) |
 | `CDN_BUCKET_NAME` | ⚠️ optional in schema | Defaults to `cdn.readmin.app` — always set it |
-| `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` | ✅ | Spaces key pair |
-| `CDN_URL` | ✅ | Public asset base URL |
+| `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` | ✅ when `s3` | Bucket key pair |
+| `CDN_URL` | ✅ when `s3` | Public asset base URL |
 | `CRYPTO_KEY` | ✅ | **Exactly 32 bytes** — AES-256-CBC key used verbatim as `Buffer.from(key)` ([Crypto-service](src/services/Crypto-service.service.ts#L14)). Encrypts stored OAuth tokens. Changing it invalidates every stored token. |
 | `JSON_WEB_TOKEN_SECRET` | ✅ | Session JWT signing secret |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_TOKEN` / `DISCORD_PUBLIC_KEY` | ✅ | See §2.2 |
@@ -360,6 +384,8 @@ npm run fastify:build    # API typecheck + emit to ./apiBuild
 1. **Managed MongoDB** cluster → connection string + database.
 2. **Managed Caching (Valkey)** cluster → `rediss://` URI.
 3. **Spaces bucket** + access keys (optionally enable the Spaces CDN and attach a subdomain).
+   Skip this if you set `STORAGE_DRIVER=local` — but note App Platform containers have ephemeral
+   disks, so on that platform a bucket is the right answer. Local storage suits a plain VPS.
 4. *(Optional)* **Managed OpenSearch** cluster.
 
 After the app exists, add each App Platform component to the **trusted sources** of every managed

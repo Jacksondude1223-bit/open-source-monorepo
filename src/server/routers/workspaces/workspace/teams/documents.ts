@@ -4,8 +4,7 @@ import { router } from '~/server/trpc';
 import { workspaceProcedure } from '~/server/procedures';
 import { readminCollections } from '~/services/mongo.service';
 import { getTeamById } from '~/services/teams.service';
-import { uploadImage } from '~/services/CDN-service';
-import { env } from '~/services/env';
+import { uploadImage, publicUrl } from '~/services/CDN-service';
 import { v4 } from 'uuid';
 import StringToObjectID from '~/utils/StringToObjectID';
 import { assertCanManageTeam, requireTeamView } from './auth';
@@ -49,7 +48,9 @@ export const workspaceTeamsDocumentsRouter = router({
         const ext = (input.fileName.split('.').pop() ?? 'bin').toLowerCase();
         const cdnPath = `team-documents/${input.groupId}/${input.teamId}/${v4()}.${ext}`;
         await uploadImage(cdnPath, input.fileName, input.fileData, 'public-read');
-        fileUrl = `${env.CDN_URL}/${cdnPath}`;
+        // The driver knows where public objects are served from — a bucket's CDN
+        // host, or this API's /files/public route when storage is on local disk.
+        fileUrl = publicUrl(cdnPath);
       }
 
       if (!fileUrl) {

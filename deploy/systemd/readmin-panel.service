@@ -27,7 +27,9 @@ SyslogIdentifier=readmin-panel
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
-ReadWritePaths=__APP_DIR__
+# Uploads live here when STORAGE_DRIVER=local. All three processes serve tRPC,
+# so all three can write them. Left pointing at the app dir when unused.
+ReadWritePaths=__APP_DIR__ __STORAGE_PATH__
 
 [Install]
 WantedBy=multi-user.target

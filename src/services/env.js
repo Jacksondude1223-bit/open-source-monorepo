@@ -19,12 +19,20 @@ const envSchema = z.object({
   STRIPE_SECRET: z.string(),
   STRIPE_SIGNING_SECRET: z.string(),
   JSON_WEB_TOKEN_SECRET: z.string(),
-  CDN_URL: z.string(),
-  CDN_ACCESS_KEY_ID: z.string(),
-  CDN_SECRET_ACCESS_KEY: z.string(),
-  CDN_ENDPOINT: z.string(),
+  // Where uploaded files live: 's3' (any S3-compatible bucket, the default) or
+  // 'local' (this server's own disk, served by the API — see services/storage).
+  STORAGE_DRIVER: z.enum(['s3', 'local']).default('s3'),
+  // Local driver only: directory holding the objects. Must be writable by the
+  // API, panel and sync processes, and is what you back up.
+  STORAGE_LOCAL_PATH: z.string().optional(),
+  // S3 driver only. Optional in the schema because STORAGE_DRIVER=local needs
+  // none of them; the S3 driver checks for them when it first builds a client.
+  CDN_URL: z.string().optional(),
+  CDN_ACCESS_KEY_ID: z.string().optional(),
+  CDN_SECRET_ACCESS_KEY: z.string().optional(),
+  CDN_ENDPOINT: z.string().optional(),
   CDN_BUCKET_NAME: z.string().optional(),
-  CDN_REIGON: z.string(),
+  CDN_REIGON: z.string().optional(),
   CRYPTO_KEY: z.string(),
   ROBLOX_COOKIE: z.string(),
   ROBLOX_API_KEY: z.string(),

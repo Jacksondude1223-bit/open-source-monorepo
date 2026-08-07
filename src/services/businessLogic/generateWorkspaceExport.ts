@@ -1,13 +1,6 @@
 import { EJSON } from 'bson';
 import { Collection } from 'mongodb';
-import {
-  GetObjectCommand,
-  ListObjectsV2Command,
-  PutObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { s3Client } from '~/services/CDN-service';
-import { env } from '~/services/env';
+import { storage } from '~/services/storage';
 import { readminCollections, MongoTypes } from '~/services/mongo.service';
 import {
   WORKSPACE_COLLECTIONS,
@@ -31,19 +24,17 @@ import {
  *    workspace with millions of session events costs the same as a small one.
  *  - Reads go to a secondary where the deployment has one, keeping a long scan
  *    off the primary that is serving the site.
- *  - CDN objects are enumerated straight from the bucket (every workspace asset
- *    is written under `workspaces/<groupId>/`), so nothing has to scan the
- *    database looking for file paths.
- *  - Presigning is done with getSignedUrl directly rather than the shared
- *    presignUrl helper, because that helper writes an image_cache row per call
- *    — thousands of pointless inserts for a bucket listing.
+ *  - Stored objects are enumerated straight from the storage driver (every
+ *    workspace asset is written under `workspaces/<groupId>/`), so nothing has
+ *    to scan the database looking for file paths.
+ *  - Signing goes through the driver directly rather than the shared presignUrl
+ *    helper, because that helper writes an image_cache row per call — thousands
+ *    of pointless inserts for a bucket listing.
  *
  * Documents are serialised as Extended JSON (EJSON) so ObjectIds and Dates
  * survive the round trip into a self-hosted instance intact. Plain JSON.stringify
  * would flatten them to strings and quietly corrupt every relation on import.
  */
-
-const BUCKET = env.CDN_BUCKET_NAME || 'cdn.readmin.app';
 
 /** Flush a part once the buffered NDJSON passes this. Bounds peak memory. */
 const PART_SIZE_BYTES = 8 * 1024 * 1024;
@@ -57,10 +48,7 @@ const PRESIGN_SECONDS = 7 * 24 * 60 * 60;
 /** How many presign operations to run at once. */
 const PRESIGN_CONCURRENCY = 50;
 
-/** Objects per ListObjectsV2 page (the S3 maximum). */
-const LIST_PAGE_SIZE = 1000;
-
-/** Bundle layout inside the CDN. */
+/** Bundle layout inside storage. */
 const exportPrefix = (groupId: string, processId: string) =>
   `workspaces/${groupId}/exports/${processId}`;
 
@@ -83,17 +71,9 @@ async function putBundleFile(
 ): Promise<MongoTypes.WorkspaceExportFile> {
   const key = `${exportPrefix(groupId, processId)}/${name}`;
   const bytes = Buffer.byteLength(body as any);
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: key,
-      Body: body,
-      // Private, always. This is the workspace's staff records, application
-      // responses and API keys — it must never be world-readable on the CDN.
-      ACL: 'private',
-      ContentType: contentType,
-    }),
-  );
+  // Private, always. This is the workspace's staff records, application
+  // responses and API keys — it must never be world-readable.
+  await storage.put(key, body, contentType, 'private');
   return { name, key, bytes };
 }
 
@@ -168,28 +148,12 @@ async function listWorkspaceCdnObjects(groupId: string): Promise<CdnObject[]> {
   const assetPrefix = workspaceAssetPrefix(groupId);
   const skipPrefix = exportsSubPrefix(groupId);
 
-  const raw: { key: string; bytes: number; lastModified?: Date }[] = [];
-  let continuationToken: string | undefined;
+  // Never fold generated bundles back into the manifest.
+  const raw = (await storage.list(assetPrefix)).filter(
+    (object) => !object.key.startsWith(skipPrefix),
+  );
 
-  do {
-    const page = await s3Client.send(
-      new ListObjectsV2Command({
-        Bucket: BUCKET,
-        Prefix: assetPrefix,
-        MaxKeys: LIST_PAGE_SIZE,
-        ContinuationToken: continuationToken,
-      }),
-    );
-    for (const object of page.Contents ?? []) {
-      if (!object.Key) continue;
-      // Never fold generated bundles back into the manifest.
-      if (object.Key.startsWith(skipPrefix)) continue;
-      raw.push({ key: object.Key, bytes: object.Size ?? 0, lastModified: object.LastModified });
-    }
-    continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
-  } while (continuationToken);
-
-  // Presigning is local crypto, but a big workspace has thousands of objects —
+  // Signing is local crypto, but a big workspace has thousands of objects —
   // chunk it so we do not open thousands of promises at once.
   const objects: CdnObject[] = [];
   for (let i = 0; i < raw.length; i += PRESIGN_CONCURRENCY) {
@@ -197,11 +161,7 @@ async function listWorkspaceCdnObjects(groupId: string): Promise<CdnObject[]> {
     const signed = await Promise.all(
       chunk.map(async (object) => ({
         ...object,
-        url: await getSignedUrl(
-          s3Client,
-          new GetObjectCommand({ Bucket: BUCKET, Key: object.key }),
-          { expiresIn: PRESIGN_SECONDS },
-        ),
+        url: await storage.signedUrl(object.key, PRESIGN_SECONDS),
       })),
     );
     objects.push(...signed);
@@ -551,11 +511,7 @@ export async function presignExportFiles(
     const signed = await Promise.all(
       chunk.map(async (file) => ({
         ...file,
-        url: await getSignedUrl(
-          s3Client,
-          new GetObjectCommand({ Bucket: BUCKET, Key: file.key }),
-          { expiresIn: expiresInSeconds },
-        ),
+        url: await storage.signedUrl(file.key, expiresInSeconds),
       })),
     );
     out.push(...signed);
