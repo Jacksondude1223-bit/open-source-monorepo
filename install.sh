@@ -210,6 +210,14 @@ fi
 cd "$APP_DIR"
 ok "Using $APP_DIR"
 
+# Print what this checkout actually is. A stale copy is the likeliest reason for
+# "the installer is not asking me what I expected" — this makes that visible
+# instead of leaving you to guess.
+if command -v git >/dev/null 2>&1 && git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  note "Checkout $(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') @ $(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')  ($(git -C "$APP_DIR" log -1 --format=%cs 2>/dev/null || echo '?'))"
+  note "If a prompt below is missing, you are on an older commit: git pull, then re-run."
+fi
+
 if [[ -z "$SERVICE_USER" ]]; then
   SERVICE_USER="$(stat -c '%U' "$APP_DIR")"
   # A root-owned checkout would mean running the services as root; prefer the
@@ -399,16 +407,27 @@ ask_url_var REDIS_URL "Redis / Valkey URL" "redis://127.0.0.1:6379" --secret
 
 printf '\n  %s— File storage —%s\n' "$BOLD" "$RESET"
 note "Logos, banners, evidence, attachments and workspace exports go somewhere."
-note "  local  this server's own disk. Nothing to sign up for; back it up yourself."
-note "  s3     any S3-compatible bucket: DO Spaces, Cloudflare R2, MinIO, S3."
-ask_var STORAGE_DRIVER "Storage driver (local or s3)" "local"
+note "  1) local  this server's own disk. No bucket, no account, nothing to pay."
+note "  2) s3     an S3-compatible bucket: DO Spaces, Cloudflare R2, MinIO, S3."
+note "Choosing 1 skips every S3 question below."
+ask_var STORAGE_DRIVER "Storage: 1 for local disk, 2 for S3" "1"
+# Accept the numbers people are shown and the names the variable actually takes.
+case "${VALUES[STORAGE_DRIVER],,}" in
+  1|local) set_var STORAGE_DRIVER 'local' ;;
+  2|s3)    set_var STORAGE_DRIVER 's3' ;;
+esac
 while [[ "${VALUES[STORAGE_DRIVER]}" != "local" && "${VALUES[STORAGE_DRIVER]}" != "s3" ]]; do
-  warn "Answer 'local' or 's3'."
+  warn "Answer 1 (local disk) or 2 (S3)."
   { (( NON_INTERACTIVE )) || ! have_tty; } && die "STORAGE_DRIVER must be 'local' or 's3'."
-  ask_var STORAGE_DRIVER "Storage driver (local or s3)" "local"
+  ask_var STORAGE_DRIVER "Storage: 1 for local disk, 2 for S3" "1"
+  case "${VALUES[STORAGE_DRIVER],,}" in
+    1|local) set_var STORAGE_DRIVER 'local' ;;
+    2|s3)    set_var STORAGE_DRIVER 's3' ;;
+  esac
 done
 
 if [[ "${VALUES[STORAGE_DRIVER]}" == "local" ]]; then
+  ok "Using this server's disk — no S3 credentials needed."
   ask_var STORAGE_LOCAL_PATH "Directory for uploaded files" "/var/lib/readmin/storage"
   note "Served by the API at ${VALUES[NEXT_PUBLIC_API_URL]}/files — private files"
   note "through expiring signed links, so the directory itself stays unexposed."
