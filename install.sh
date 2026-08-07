@@ -31,6 +31,11 @@ SKIP_SERVICES=0
 ENV_ONLY=0
 NON_INTERACTIVE=0
 SERVICE_USER=""
+UPDATE_MODE="ask"   # ask | always | never
+
+# Kept before parsing eats them: after a self-update the script re-runs itself
+# with exactly the arguments it was given.
+ORIGINAL_ARGS=("$@")
 
 usage() {
   cat <<'EOF'
@@ -39,8 +44,12 @@ ReAdmin installer
 Usage: sudo ./install.sh [options]
 
 Options:
+  --update             Pull the latest commit from the repository before doing
+                       anything else, without asking. The script then re-runs
+                       itself so the new version is what installs.
+  --no-update          Never check the repository for a newer commit.
   --yes, -y            Accept every confirmation (still prompts for credentials
-                       that have no existing value).
+                       that have no existing value). Includes the update prompt.
   --non-interactive    Never prompt. Requires a complete .env to already exist;
                        fails if anything is missing. Implies --yes.
   --env-only           Only run the credential wizard and write .env, then stop.
@@ -59,6 +68,8 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --update) UPDATE_MODE="always" ;;
+    --no-update) UPDATE_MODE="never" ;;
     -y|--yes) ASSUME_YES=1 ;;
     --non-interactive) NON_INTERACTIVE=1; ASSUME_YES=1 ;;
     --env-only) ENV_ONLY=1 ;;
@@ -95,6 +106,10 @@ die()   { printf '\n%s✗ %s%s\n\n' "$RED$BOLD" "$*" "$RESET" >&2; exit 1; }
 TTY_IN="/dev/tty"
 have_tty() { [[ -r "$TTY_IN" ]]; }
 
+# Set when a read hits end-of-input. Without it, a required prompt that can never
+# be answered — piped input that ran out, a closed terminal — re-asks forever.
+ASK_EOF=0
+
 ask() { # ask <varname> <prompt> [default]
   local __var="$1" __prompt="$2" __default="${3:-}" __reply=""
   if (( NON_INTERACTIVE )) || ! have_tty; then
@@ -106,7 +121,7 @@ ask() { # ask <varname> <prompt> [default]
   else
     printf '    %s: ' "$__prompt" > "$TTY_IN"
   fi
-  IFS= read -r __reply < "$TTY_IN" || true
+  IFS= read -r __reply < "$TTY_IN" || ASK_EOF=1
   printf -v "$__var" '%s' "${__reply:-$__default}"
 }
 
@@ -123,7 +138,7 @@ ask_secret() { # ask_secret <varname> <prompt> [default] [hint]
   else
     printf '    %s: ' "$__prompt" > "$TTY_IN"
   fi
-  IFS= read -rs __reply < "$TTY_IN" || true
+  IFS= read -rs __reply < "$TTY_IN" || ASK_EOF=1
   printf '\n' > "$TTY_IN"
   printf -v "$__var" '%s' "${__reply:-$__current}"
 }
@@ -210,13 +225,104 @@ fi
 cd "$APP_DIR"
 ok "Using $APP_DIR"
 
+# Whoever owns the checkout owns its git history. Running git as root against a
+# user-owned repo trips "detected dubious ownership" and every command fails, so
+# all git work here goes through the owner.
+REPO_OWNER="$(stat -c '%U' "$APP_DIR" 2>/dev/null || echo root)"
+IS_GIT_REPO=0
+if command -v git >/dev/null 2>&1 && [[ -d "$APP_DIR/.git" ]]; then
+  IS_GIT_REPO=1
+fi
+repo_git() { run_as_user "$REPO_OWNER" git -C "$APP_DIR" "$@"; }
+
 # Print what this checkout actually is. A stale copy is the likeliest reason for
 # "the installer is not asking me what I expected" — this makes that visible
 # instead of leaving you to guess.
-if command -v git >/dev/null 2>&1 && git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-  note "Checkout $(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') @ $(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')  ($(git -C "$APP_DIR" log -1 --format=%cs 2>/dev/null || echo '?'))"
-  note "If a prompt below is missing, you are on an older commit: git pull, then re-run."
+if (( IS_GIT_REPO )); then
+  note "Checkout $(repo_git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') @ $(repo_git rev-parse --short HEAD 2>/dev/null || echo '?')  ($(repo_git log -1 --format=%cs 2>/dev/null || echo '?'))"
 fi
+
+# ── 1b. update to the latest version ──────────────────────────────────────────
+# Running a stale checkout is the single most confusing way for this to go
+# wrong: the installer skips a question you were told to expect, or installs
+# code without a fix you already have. So it offers to bring itself up to date
+# first, and re-runs the NEW script rather than carrying on as the old one.
+
+self_update() {
+  [[ "$UPDATE_MODE" == "never" ]] && { note "Update check skipped (--no-update)"; return; }
+  (( IS_GIT_REPO )) || { note "Not a git checkout — nothing to update from."; return; }
+  # Set on the re-exec below. Without it a bad comparison could loop forever.
+  [[ -n "${READMIN_SELF_UPDATED:-}" ]] && { ok "Running the updated installer."; return; }
+
+  step "Checking for a newer version"
+
+  local branch
+  branch="$(repo_git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+  if [[ -z "$branch" ]]; then
+    warn "Cannot read this checkout's branch — skipping the update check."
+    return
+  fi
+  if [[ "$branch" == "HEAD" ]]; then
+    warn "Detached HEAD, so there is no branch to update."
+    note "  git checkout $REPO_BRANCH   then re-run to get updates."
+    return
+  fi
+
+  info "Fetching origin/$branch ..."
+  if ! repo_git fetch --quiet origin "$branch" 2>/dev/null; then
+    warn "Could not reach the repository. Continuing with the local copy."
+    return
+  fi
+  if ! repo_git rev-parse --verify --quiet "origin/$branch" >/dev/null 2>&1; then
+    warn "origin/$branch does not exist. Continuing with the local copy."
+    return
+  fi
+
+  local behind
+  behind="$(repo_git rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+  if [[ "$behind" == "0" ]]; then
+    ok "Already up to date ($branch @ $(repo_git rev-parse --short HEAD))."
+    return
+  fi
+
+  warn "$behind new commit(s) on origin/$branch:"
+  { repo_git log --oneline --no-decorate "HEAD..origin/$branch" 2>/dev/null | head -10 || true; } | while IFS= read -r line; do
+    note "  $line"
+  done
+
+  if [[ "$UPDATE_MODE" != "always" ]] && ! confirm "Update to the latest version before installing?"; then
+    note "Continuing on the current commit."
+    return
+  fi
+
+  # Only tracked files matter — .env and node_modules are gitignored, so a
+  # normal deployment has nothing in the way here.
+  if [[ -n "$(repo_git status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+    warn "You have local edits to tracked files, so the update was not applied:"
+    { repo_git status --short --untracked-files=no 2>/dev/null | head -10 || true; } | while IFS= read -r line; do
+      note "  $line"
+    done
+    note "Keep them:    git stash && sudo ./install.sh --update"
+    note "Discard them: git reset --hard origin/$branch && sudo ./install.sh"
+    note "Your .env is untouched either way — it is not tracked."
+    return
+  fi
+
+  if ! repo_git merge --ff-only "origin/$branch" >/dev/null 2>&1; then
+    warn "The local branch has diverged from origin/$branch, so it was left alone."
+    note "To take the remote version: git reset --hard origin/$branch"
+    return
+  fi
+  ok "Updated to $(repo_git rev-parse --short HEAD) ($(repo_git log -1 --format=%cs))."
+
+  # bash reads a script as it runs, so continuing now would execute a mixture of
+  # the old and new file. Hand over to the new one instead, with the same args.
+  info "Restarting the installer on the new version ..."
+  printf '\n'
+  exec env READMIN_SELF_UPDATED=1 bash "$APP_DIR/install.sh" ${ORIGINAL_ARGS[@]+"${ORIGINAL_ARGS[@]}"}
+}
+
+self_update
 
 # A second checkout nested inside this one is almost always an accidental
 # re-clone. The build no longer typechecks it (tsconfig scopes itself to src/),
@@ -354,6 +460,7 @@ ask_var() { # ask_var <KEY> <prompt> [default] [--secret] [--optional]
     if (( secret )); then ask_secret value "$prompt" "$default" "$hint"; else ask value "$prompt" "$default"; fi
     if [[ -z "$value" ]] && (( ! optional )); then
       if (( NON_INTERACTIVE )) || ! have_tty; then die "$key is required but unset."; fi
+      (( ASK_EOF )) && die "Input ended while $key was still unanswered. $key is required."
       warn "$key is required."
       continue
     fi
