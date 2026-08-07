@@ -1,8 +1,7 @@
 import { readminCollections } from "~/services/mongo.service";
 import { getUserInfo, batchGetRobloxUsers } from "~/services/roblox.service";
 import { UserInfo } from "~/services/types/roblox.types";
-import { s3Client } from '~/services/CDN-service';
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { storage } from '~/services/storage';
 import { v4 } from 'uuid';
 import { json2csv } from 'json-2-csv';
 import { UserGameSessionDistributionSummary } from "~/services/NewMongoTypes";
@@ -288,25 +287,18 @@ export async function generateView(processId: string) {
         const filePath = `workspaces/${groupId}/views/${viewId}/${v4()}/${id}-${foundView.name.split(' ').join('-')}-distribution${distribution.num}-${fileName}`;
         //const dataBuffer = Buffer.from(exportData, 'base64');
         const ContentType = exportType == 'json' ? 'application/json' : 'text/csv';
-        await s3Client.send(
-            new PutObjectCommand({
-                Bucket: 'readmin',
-                Key: filePath,
-                Body: exportData,
-                ACL: 'public-read',
-                ContentType: ContentType,
-                Metadata: {
-                    'Content-Disposition': `attachment; file="${fileName}"`
-                }
-                //ContentEncoding: 'base64',
-            }),
-        );
+        // Private: a view export is staff activity data. The download endpoint
+        // signs it on request (views.getViewDownload), so it was never fetched
+        // over a public URL anyway.
+        await storage.put(filePath, exportData, ContentType, 'private');
 
-        await readminCollections.workspace_view_export.updateOne({ processId }, { $set: { status: 'finished', url: `https://cdn.readmin.app/${filePath}`, completed: new Date() } })
+        // Store the storage key, not a URL. The bytes may live in a bucket or on
+        // this server's disk, and only the driver knows how to address them.
+        await readminCollections.workspace_view_export.updateOne({ processId }, { $set: { status: 'finished', url: filePath, completed: new Date() } })
 
 
         // Return the computed data
-        return { url: `https://cdn.readmin.app/${filePath}` };
+        return { url: filePath };
 
     } catch (e) {
         console.error(e);

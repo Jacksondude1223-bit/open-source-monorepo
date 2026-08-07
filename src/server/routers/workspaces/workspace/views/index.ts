@@ -14,6 +14,23 @@ import { generateView } from '~/services/businessLogic/generateView';
 import { presignUrl } from '~/services/CDN-service';
 import StringToObjectID from '~/utils/StringToObjectID';
 
+/**
+ * The storage key for a finished view export.
+ *
+ * New rows store the key itself. Rows written before storage became pluggable
+ * hold a full `https://cdn.readmin.app/<key>` URL, so strip the origin off those
+ * — otherwise every export generated before the upgrade stops downloading.
+ */
+function storageKeyOf(stored: string): string {
+  if (!/^https?:\/\//i.test(stored)) {
+    return stored;
+  }
+  try {
+    return new URL(stored).pathname.replace(/^\/+/, '');
+  } catch {
+    return stored;
+  }
+}
 
 export const workspaceViewsRouter = router({
   compute: computeViewData,
@@ -154,10 +171,9 @@ export const workspaceViewsRouter = router({
         throw ReturnNormalFailure('NOT_FOUND', 'View download not found');
       }
       if (newViewDownload?.url) {
-        console.log(newViewDownload)
         return {
           ...newViewDownload,
-          url: await presignUrl(newViewDownload.url.split('readmin.app/')[1] as string, 60)
+          url: await presignUrl(storageKeyOf(newViewDownload.url), 60)
         }
       }
       return newViewDownload;

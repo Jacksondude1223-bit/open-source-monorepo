@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import { activityRouter } from "./activity";
 import { applicationsRouter } from "./applications";
 import { callsRouter } from "./calls";
+import { filesRouter } from "./files";
 import { gamesRouter } from "./games";
 import { internalRouter } from "./internal";
 import { ordersV2Router } from "./ordersV2";
@@ -20,6 +21,7 @@ export const defaultRouter = fp(async (fastify) => {
     fastify.register(activityRouter, { prefix: '/activity' })
     fastify.register(applicationsRouter, { prefix: '/applications' })
     fastify.register(callsRouter, { prefix: '/calls' })
+    fastify.register(filesRouter, { prefix: '/files' })
     fastify.register(gamesRouter, { prefix: '/games' })
     fastify.register(internalRouter, { prefix: '/internal' })
     fastify.register(ordersV2Router, { prefix: '/v2' })

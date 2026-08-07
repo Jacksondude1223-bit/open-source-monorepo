@@ -15,7 +15,7 @@ import WorkspaceUpsale from '~/components/page_components/workspaces/settings/bi
 import Card from '~/components/ui/Card';
 import LoadingAnimation from '~/components/ui/LoadingAnimation';
 import Modal from '~/components/ui/Modal';
-import { DataGridPro, GridColDef, GridPaginationModel } from '@mui/x-data-grid-pro';
+import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { debounce } from 'lodash';
 import { keepPreviousData } from '@tanstack/react-query';
 import ReactTimeago from 'react-timeago';
@@ -316,7 +316,7 @@ function RankingKeyEventsList({ groupId }: { groupId: string }) {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800 shadow relative">
-        <DataGridPro
+        <DataGrid
           autoHeight
           rows={rows}
           columns={columns}

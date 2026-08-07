@@ -106,7 +106,6 @@ module.exports = getConfig({
   ],
   transpilePackages: [
     '@mui/x-data-grid',
-    '@mui/x-data-grid-pro',
   ]
 });
 // 7143

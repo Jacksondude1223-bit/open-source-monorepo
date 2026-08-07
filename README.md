@@ -116,7 +116,7 @@ same `src/services` layer and therefore need the same environment.
 | --- | --- | --- | --- |
 | **MongoDB** (DO Managed MongoDB) | **Yes** | Primary datastore — every collection in [mongo.service.ts](src/services/mongo.service.ts#L90) | `MONGODB_URI`, `MONGODB_DATABASE` |
 | **Valkey / Redis** (DO Managed Caching) | **Yes** | Cross-process OAuth refresh locking and caching ([redis.client.ts](src/services/redis.client.ts), [cache.service.ts](src/services/cache.service.ts)) | `REDIS_URL` |
-| **S3-compatible object storage** (DO Spaces) | **Yes** | Uploads: logos, banners, note/feed/session images, workspace export bundles ([CDN-service.ts](src/services/CDN-service.ts)) | `CDN_ENDPOINT`, `CDN_REIGON`, `CDN_BUCKET_NAME`, `CDN_ACCESS_KEY_ID`, `CDN_SECRET_ACCESS_KEY`, `CDN_URL` |
+| **File storage** — this server's disk, or an S3-compatible bucket | **Yes** (disk needs no account) | Uploads: logos, banners, note/feed/session images, workspace export bundles ([storage/](src/services/storage)) | `STORAGE_DRIVER`, then either `STORAGE_LOCAL_PATH` or the `CDN_*` set |
 | **OpenSearch** (DO Managed OpenSearch) | Optional | Fast Roblox user search + in-game chat search. When `OPENSEARCH_URL` is unset every helper is a no-op and callers fall back to MongoDB ([opensearch.service.ts](src/services/opensearch.service.ts)) | `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` |
 
 **MongoDB.** The client forces `ssl: true` / `tls: true`, so the URI must be a TLS-capable
@@ -133,14 +133,36 @@ cost nothing, and there is no script to run. See §2.1.1 for what to check after
 **Valkey/Redis.** Use the `rediss://` scheme for DO's TLS-only managed caching cluster. Keys are
 namespaced `readmin-<NEXT_PUBLIC_VERCEL_ENV>`, so several environments can share one cluster safely.
 
-**Spaces.** Create a bucket and a Spaces access key pair. Objects are written with explicit ACLs
-(`private` by default, `public-read` for public assets) and private objects are served through
-presigned URLs cached in the `image_cache` collection.
+**File storage.** Objects are written with explicit ACLs (`private` by default, `public-read` for
+public assets); private objects are reached through expiring signed URLs cached in the `image_cache`
+collection. `STORAGE_DRIVER` picks where the bytes actually live — the two drivers are in
+[services/storage/](src/services/storage) and nothing above that layer knows the difference.
 
-- `CDN_ENDPOINT` — regional Spaces endpoint, e.g. `https://nyc3.digitaloceanspaces.com`
+*`STORAGE_DRIVER=local` — the VPS's own disk.* No account, no bucket, no bill. This is what
+`install.sh` offers first.
+
+- `STORAGE_LOCAL_PATH` — directory holding the objects, default `/var/lib/readmin/storage`. It gets
+  an `objects/` tree (the bytes, at their key paths) and a `meta/` tree (content type and ACL).
+- The API serves it at `<NEXT_PUBLIC_API_URL>/files`: `/files/signed/<key>` for private objects,
+  carrying an HMAC over the key and expiry, and `/files/public/<key>` for `public-read` ones. A
+  private object is a 404 on the public route, so a guessed key gets nothing.
+- **All three processes must be able to write it.** The panel, API and sync worker all serve tRPC,
+  so all three accept uploads. `install.sh` creates the directory owned by the service user and adds
+  it to each unit's `ReadWritePaths`.
+- **Back it up.** Unlike MongoDB this is not reproducible from anywhere else, and no managed service
+  is replicating it for you.
+
+*`STORAGE_DRIVER=s3` — any S3-compatible bucket* (DO Spaces, Cloudflare R2, MinIO, S3). Create a
+bucket and an access key pair, then set:
+
+- `CDN_ENDPOINT` — regional endpoint, e.g. `https://nyc3.digitaloceanspaces.com`
 - `CDN_REIGON` — the region slug, e.g. `nyc3` (yes, the variable name is misspelled in code)
 - `CDN_BUCKET_NAME` — bucket name; **defaults to `cdn.readmin.app` if unset**, so always set it
-- `CDN_URL` — public base URL used to build asset links (Spaces CDN endpoint or a custom subdomain)
+- `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` — the key pair
+- `CDN_URL` — public base URL used to build asset links (bucket CDN endpoint or a custom subdomain)
+
+Switching drivers does not migrate anything. Moving between them means copying the objects across
+yourself, keeping the same key layout.
 
 **OpenSearch.** Indexes `roblox_users_<NODE_ENV>` and `game_chats_<NODE_ENV>` are created
 automatically on first use. Skip this service entirely for a small instance; search stays functional
@@ -235,43 +257,43 @@ longer read anywhere in `src/` — set any non-empty placeholder:
 
 `ROBLOX_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `CONTIGUITY_SECRET`
 
-### 2.4 MUI X Pro — a paid, non-transferable licence
+### 2.4 MUI — no licence needed
 
-The panel depends on three **commercial** MUI packages:
+The panel's UI is [MUI](https://mui.com), which is **free and MIT licensed**. Nothing here needs a
+paid key, and no watermark appears.
 
-- `@mui/x-data-grid-pro` — the data grid behind the member, activity, and admin tables
-- `@mui/x-charts-pro` — dashboard charts
-- `@mui/x-date-pickers-pro` — the date-range pickers
+It did once. The panel used to depend on three *commercial* packages — `@mui/x-data-grid-pro`,
+`@mui/x-charts-pro` and `@mui/x-date-pickers-pro` — and shipped with an empty
+`LicenseInfo.setLicenseKey('')`, so grids rendered watermarked with a console error until you bought
+your own licence. MUI X licences are per developer and not sublicensable, so a self-hosted
+deployment could not lawfully have used ReAdmin's key anyway.
 
-**No licence key ships with this source.** The call at
-[_app.tsx:119](src/pages/_app.tsx#L119) is `LicenseInfo.setLicenseKey('')` — ReAdmin's own key was
-removed before publishing. MUI X licences are sold per developer and are not sublicensable, so a
-self-hosted deployment could not lawfully have used it anyway.
+Those are gone. The panel now uses only the free tier:
 
-> ⚠️ **Out of the box the grids render with a watermark and a console error.** That is the
-> unlicensed state, not a bug. Pick one of the options below before putting the panel in front of
-> users.
+| Was | Now |
+| --- | --- |
+| `@mui/x-data-grid-pro` | `@mui/x-data-grid` |
+| `@mui/x-date-pickers-pro` | `@mui/x-date-pickers` |
+| `@mui/x-charts-pro` | `@mui/x-charts` — it was already unused, every chart imported the free package |
 
-Self-hosters have three options:
+Two Pro-only features were in use and were rebuilt rather than dropped:
 
-1. **Buy your own MUI X Pro licence** ([mui.com/pricing](https://mui.com/pricing)) and set the
-   key at [_app.tsx:119](src/pages/_app.tsx#L119).
-2. **Downgrade to the free packages** — swap `@mui/x-data-grid-pro` → `@mui/x-data-grid`,
-   `@mui/x-charts-pro` → `@mui/x-charts`, `@mui/x-date-pickers-pro` → `@mui/x-date-pickers`, then
-   drop the `LicenseInfo` call. This costs the Pro-only features those six files use — column
-   pinning/grouping, tree data, and the date-*range* pickers, which have no free equivalent and need
-   replacing with two single date pickers. Affected files:
-   [DateBetweenPicker.tsx](src/components/ui/DateBetweenPicker.tsx),
-   [admin/workspaces](src/pages/admin/workspaces/index.tsx),
-   [admin/game-stats](src/pages/admin/game-stats/index.tsx),
-   [settings/ranking-api](src/pages/workspaces/%5BgroupId%5D/settings/ranking-api/index.tsx),
-   [users/logging](src/pages/workspaces/%5BgroupId%5D/users/%5BuserId%5D/logging/index.tsx).
-3. **Run unlicensed** — the current default. The components still render, but with a watermark over
-   the grid and a console error. Not a viable option for anything user-facing, and a breach of MUI's
-   terms.
+- **The date-*range* picker** ([DateBetweenPicker.tsx](src/components/ui/DateBetweenPicker.tsx)) has
+  no free equivalent. It is now two ordinary date pickers; the end date will not accept a day before
+  the start. Consumers are unaffected — the component still exposes the same hidden `#startdate` and
+  `#enddate` inputs.
+- **The master-detail evidence panel** on
+  [users/logging](src/pages/workspaces/%5BgroupId%5D/users/%5BuserId%5D/logging/index.tsx) —
+  expandable detail rows are paid. Evidence is now an **Evidence** column showing the attachment
+  count, which opens the same attachments in a dialog.
 
-Note that `@mui/x-data-grid` and `@mui/x-data-grid-pro` are both listed in `transpilePackages` in
-[next.config.js](next.config.js), so option 2 needs no build-config change.
+No Pro-only grid features (column pinning, row grouping, tree data) were used, so the four grids
+carried over unchanged beyond the component name.
+
+If you would rather have the Pro components back, buy a licence at
+[mui.com/pricing](https://mui.com/pricing), reinstall the three `-pro` packages, and restore the
+`LicenseInfo.setLicenseKey(...)` call in [_app.tsx](src/pages/_app.tsx). You do not need to: the free
+tier is a complete panel.
 
 ---
 
@@ -284,11 +306,13 @@ Note that `@mui/x-data-grid` and `@mui/x-data-grid-pro` are both listed in `tran
 | `MONGODB_URI` | ✅ | Must be a valid URL; TLS is forced |
 | `MONGODB_DATABASE` | ✅ | Database name |
 | `REDIS_URL` | ✅ | `rediss://…` for DO managed caching |
-| `CDN_ENDPOINT` | ✅ | e.g. `https://nyc3.digitaloceanspaces.com` |
-| `CDN_REIGON` | ✅ | e.g. `nyc3` (misspelling intentional) |
+| `STORAGE_DRIVER` | Optional | `local` (this server's disk) or `s3` (a bucket). Defaults to `s3` |
+| `STORAGE_LOCAL_PATH` | ✅ when `local` | Directory for uploads, default `/var/lib/readmin/storage`. Must be writable by all three processes |
+| `CDN_ENDPOINT` | ✅ when `s3` | e.g. `https://nyc3.digitaloceanspaces.com` |
+| `CDN_REIGON` | ✅ when `s3` | e.g. `nyc3` (misspelling intentional) |
 | `CDN_BUCKET_NAME` | ⚠️ optional in schema | Defaults to `cdn.readmin.app` — always set it |
-| `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` | ✅ | Spaces key pair |
-| `CDN_URL` | ✅ | Public asset base URL |
+| `CDN_ACCESS_KEY_ID` / `CDN_SECRET_ACCESS_KEY` | ✅ when `s3` | Bucket key pair |
+| `CDN_URL` | ✅ when `s3` | Public asset base URL |
 | `CRYPTO_KEY` | ✅ | **Exactly 32 bytes** — AES-256-CBC key used verbatim as `Buffer.from(key)` ([Crypto-service](src/services/Crypto-service.service.ts#L14)). Encrypts stored OAuth tokens. Changing it invalidates every stored token. |
 | `JSON_WEB_TOKEN_SECRET` | ✅ | Session JWT signing secret |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` / `DISCORD_TOKEN` / `DISCORD_PUBLIC_KEY` | ✅ | See §2.2 |
@@ -360,6 +384,8 @@ npm run fastify:build    # API typecheck + emit to ./apiBuild
 1. **Managed MongoDB** cluster → connection string + database.
 2. **Managed Caching (Valkey)** cluster → `rediss://` URI.
 3. **Spaces bucket** + access keys (optionally enable the Spaces CDN and attach a subdomain).
+   Skip this if you set `STORAGE_DRIVER=local` — but note App Platform containers have ephemeral
+   disks, so on that platform a bucket is the right answer. Local storage suits a plain VPS.
 4. *(Optional)* **Managed OpenSearch** cluster.
 
 After the app exists, add each App Platform component to the **trusted sources** of every managed
@@ -462,7 +488,6 @@ or `npm run build`) — restarting the services is not enough.
 | --- | --- | --- |
 | [discord.service.ts:285](src/services/discord.service.ts#L285) | Internal Discord logging webhooks (billing, distributions, game errors, image uploads, …) | Redacted to `''`. Every send fails harmlessly until you supply your own webhook URLs. Unrelated to the per-workspace logging webhooks users configure in the UI. |
 | [posthog.service.ts:3](src/services/posthog.service.ts#L3) | PostHog project API key | Redacted to `''`, so no analytics are sent. Add your own project key or delete the client. |
-| [_app.tsx:119](src/pages/_app.tsx#L119) | MUI X Pro licence key | Empty — grids render watermarked until you supply a licence. See §2.4. |
 
 **Only matters if you enable billing:**
 
@@ -572,8 +597,8 @@ requires a separate agreement.
 
 Two things this licence does *not* cover:
 
-- **Third-party dependencies**, which are licensed by their own authors. Most notably the MUI X Pro
-  packages are commercial software needing a licence bought from MUI — no key ships with this
-  source. See §2.4.
+- **Third-party dependencies**, which are licensed by their own authors. All of them are free to
+  use — the panel deliberately stays on MUI's MIT-licensed tier and needs no purchased key. See
+  §2.4.
 - **Redistribution obligations.** If you pass ReAdmin on, PolyForm requires you to include these
   terms and the `Required Notice:` line from [LICENSE.md](LICENSE.md) with it.

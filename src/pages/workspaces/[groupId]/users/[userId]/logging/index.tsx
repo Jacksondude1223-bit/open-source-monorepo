@@ -9,8 +9,8 @@ import WorkspaceUserSidebarLayout from '~/components/page_components/workspaces/
 import { useWorkspace } from '~/components/contexts/workspace';
 import { trpc } from '~/utils/trpc';
 import { Attachment } from '../../..';
-import { DataGridPro } from '@mui/x-data-grid-pro';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { DataGrid } from '@mui/x-data-grid';
+import { PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { DocumentTextIcon, NoSymbolIcon, ArrowTrendingUpIcon, ClockIcon } from '@heroicons/react/20/solid';
 import Button from '~/components/forms/Button';
 import StatCard from '~/components/ui/StatCard';
@@ -18,8 +18,46 @@ import toast from 'react-hot-toast';
 import { getProcessedUserObjectType } from '~/services/roblox.service';
 import ReactTimeago from 'react-timeago';
 import CreateEmployeeHistoryModal from '~/components/page_components/workspaces/employee-history/CreateHistory.modal';
-import { Fab } from '@mui/material';
+import { Dialog, DialogContent, DialogTitle, Fab } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+
+/**
+ * Evidence attached to a history record.
+ *
+ * This used to be a DataGridPro master-detail row that expanded underneath the
+ * record. Detail panels are a paid feature, so the attachments now open in a
+ * dialog instead — same evidence, one click, no licence.
+ */
+function EvidenceCell({ evidence }: { evidence?: string[] }) {
+  const [open, setOpen] = useState(false);
+
+  if (!evidence || evidence.length === 0) {
+    return <span className="text-sm text-gray-400 dark:text-gray-500">None</span>;
+  }
+
+  return (
+    <>
+      <Button
+        variant="discrete"
+        icon={PaperClipIcon}
+        onClick={() => setOpen(true)}
+      >
+        {`${evidence.length} file${evidence.length === 1 ? '' : 's'}`}
+      </Button>
+
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Evidence</DialogTitle>
+        <DialogContent>
+          <div className="flex flex-row flex-wrap gap-2 py-2">
+            {evidence.map((attachment: string) => (
+              <Attachment key={attachment} attachment={attachment} />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function actionsRender(params: any) {
   const workspace = useWorkspace();
@@ -127,7 +165,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 shadow-sm dark:border-gray-700/80">
-        <DataGridPro
+        <DataGrid
           loading={isLoading}
           slotProps={{
             loadingOverlay: {
@@ -136,20 +174,6 @@ export default function DashboardPage() {
             },
           }}
           className='dark:bg-gray-800'
-          getDetailPanelHeight={() => 'auto'}
-          getDetailPanelContent={({ row }) => {
-            if (row?.evidence?.length == 0 || !row?.evidence) {
-              return <p className='text-center text-gray-500 text-sm py-0.5'>No evidence provided</p>
-            }
-            return (
-
-              <div className="flex flex-row gap-2 py-2">
-                {row.evidence.map((attachment: string) => (
-                  <Attachment key={attachment} attachment={attachment} />
-                ))}
-              </div>
-            )
-          }}
           rows={history?.map(logItem => {
             return {
               id: logItem._id,
@@ -180,6 +204,7 @@ export default function DashboardPage() {
             { field: 'distribution', headerName: 'Distribution', width: 100 },
             { field: 'expires', headerName: 'Expires', width: 150, renderCell: (params) => (<ReactTimeago date={params.value} />) },
             { field: 'created', headerName: 'Created', width: 150, renderCell: (params) => (<ReactTimeago date={params.value} />) },
+            { field: 'evidence', headerName: 'Evidence', width: 150, sortable: false, filterable: false, renderCell: (params) => (<EvidenceCell evidence={params.value} />) },
             { field: 'actions', headerName: 'Action', width: 300, sortable: false, renderCell: actionsRender }
           ]} />
         </div>

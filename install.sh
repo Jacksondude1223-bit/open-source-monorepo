@@ -210,6 +210,14 @@ fi
 cd "$APP_DIR"
 ok "Using $APP_DIR"
 
+# Print what this checkout actually is. A stale copy is the likeliest reason for
+# "the installer is not asking me what I expected" — this makes that visible
+# instead of leaving you to guess.
+if command -v git >/dev/null 2>&1 && git -C "$APP_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  note "Checkout $(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') @ $(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo '?')  ($(git -C "$APP_DIR" log -1 --format=%cs 2>/dev/null || echo '?'))"
+  note "If a prompt below is missing, you are on an older commit: git pull, then re-run."
+fi
+
 if [[ -z "$SERVICE_USER" ]]; then
   SERVICE_USER="$(stat -c '%U' "$APP_DIR")"
   # A root-owned checkout would mean running the services as root; prefer the
@@ -397,14 +405,40 @@ ask_url_var MONGODB_URI "MongoDB connection string" "mongodb://127.0.0.1:27017" 
 ask_var MONGODB_DATABASE "MongoDB database name" "readmin"
 ask_url_var REDIS_URL "Redis / Valkey URL" "redis://127.0.0.1:6379" --secret
 
-printf '\n  %s— Object storage (S3 compatible) —%s\n' "$BOLD" "$RESET"
-note "DigitalOcean Spaces, Cloudflare R2, MinIO or S3 all work."
-ask_url_var CDN_ENDPOINT "S3 endpoint" "https://nyc3.digitaloceanspaces.com"
-ask_var CDN_REIGON "S3 region (yes, spelled that way in the schema)" "nyc3"
-ask_var CDN_BUCKET_NAME "Bucket name" "readmin-cdn"
-ask_var CDN_ACCESS_KEY_ID "Access key ID" "" --secret
-ask_var CDN_SECRET_ACCESS_KEY "Secret access key" "" --secret
-ask_url_var CDN_URL "Public URL that serves the bucket" "${VALUES[CDN_ENDPOINT]}/${VALUES[CDN_BUCKET_NAME]}"
+printf '\n  %s— File storage —%s\n' "$BOLD" "$RESET"
+note "Logos, banners, evidence, attachments and workspace exports go somewhere."
+note "  1) local  this server's own disk. No bucket, no account, nothing to pay."
+note "  2) s3     an S3-compatible bucket: DO Spaces, Cloudflare R2, MinIO, S3."
+note "Choosing 1 skips every S3 question below."
+ask_var STORAGE_DRIVER "Storage: 1 for local disk, 2 for S3" "1"
+# Accept the numbers people are shown and the names the variable actually takes.
+case "${VALUES[STORAGE_DRIVER],,}" in
+  1|local) set_var STORAGE_DRIVER 'local' ;;
+  2|s3)    set_var STORAGE_DRIVER 's3' ;;
+esac
+while [[ "${VALUES[STORAGE_DRIVER]}" != "local" && "${VALUES[STORAGE_DRIVER]}" != "s3" ]]; do
+  warn "Answer 1 (local disk) or 2 (S3)."
+  { (( NON_INTERACTIVE )) || ! have_tty; } && die "STORAGE_DRIVER must be 'local' or 's3'."
+  ask_var STORAGE_DRIVER "Storage: 1 for local disk, 2 for S3" "1"
+  case "${VALUES[STORAGE_DRIVER],,}" in
+    1|local) set_var STORAGE_DRIVER 'local' ;;
+    2|s3)    set_var STORAGE_DRIVER 's3' ;;
+  esac
+done
+
+if [[ "${VALUES[STORAGE_DRIVER]}" == "local" ]]; then
+  ok "Using this server's disk — no S3 credentials needed."
+  ask_var STORAGE_LOCAL_PATH "Directory for uploaded files" "/var/lib/readmin/storage"
+  note "Served by the API at ${VALUES[NEXT_PUBLIC_API_URL]}/files — private files"
+  note "through expiring signed links, so the directory itself stays unexposed."
+else
+  ask_url_var CDN_ENDPOINT "S3 endpoint" "https://nyc3.digitaloceanspaces.com"
+  ask_var CDN_REIGON "S3 region (yes, spelled that way in the schema)" "nyc3"
+  ask_var CDN_BUCKET_NAME "Bucket name" "readmin-cdn"
+  ask_var CDN_ACCESS_KEY_ID "Access key ID" "" --secret
+  ask_var CDN_SECRET_ACCESS_KEY "Secret access key" "" --secret
+  ask_url_var CDN_URL "Public URL that serves the bucket" "${VALUES[CDN_ENDPOINT]}/${VALUES[CDN_BUCKET_NAME]}"
+fi
 
 printf '\n  %s— Discord application —%s\n' "$BOLD" "$RESET"
 ask_var DISCORD_CLIENT_ID "Discord client ID" ""
@@ -463,7 +497,11 @@ set_var NEXT_PUBLIC_VERCEL_ENV "production"
 set_var SELF_HOSTED "true"
 set_var APP_NAME "panel"
 set_var CORS_ORIGINS "${VALUES[NEXT_PUBLIC_PANEL_URL]}"
-set_var CSP_EXTRA_DOMAINS "$(host_of "${VALUES[NEXT_PUBLIC_PANEL_URL]}") $(host_of "${VALUES[NEXT_PUBLIC_API_URL]}") $(host_of "${VALUES[CDN_URL]}")"
+# The CSP needs every host the browser loads from. With local storage that is
+# just the API, which serves the files itself.
+CSP_HOSTS="$(host_of "${VALUES[NEXT_PUBLIC_PANEL_URL]}") $(host_of "${VALUES[NEXT_PUBLIC_API_URL]}")"
+[[ -n "${VALUES[CDN_URL]:-}" ]] && CSP_HOSTS="$CSP_HOSTS $(host_of "${VALUES[CDN_URL]}")"
+set_var CSP_EXTRA_DOMAINS "$CSP_HOSTS"
 for placeholder in ROBLOX_SECRET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY CONTIGUITY_SECRET; do
   set_var "$placeholder" "${CURRENT[$placeholder]:-unused}"
 done
@@ -500,6 +538,21 @@ as_root cp "$TMP_ENV" "$ENV_FILE"
 as_root chown "$SERVICE_USER":"$SERVICE_GROUP" "$ENV_FILE"
 as_root chmod 600 "$ENV_FILE"
 ok "Wrote $ENV_FILE (0600, owned by $SERVICE_USER)"
+
+# ── local storage directory ───────────────────────────────────────────────────
+# Substituted into the systemd units' ReadWritePaths. Points at the app dir when
+# storage is remote, so the directive always names something that exists.
+STORAGE_PATH="$APP_DIR"
+if [[ "${VALUES[STORAGE_DRIVER]}" == "local" ]]; then
+  STORAGE_PATH="${VALUES[STORAGE_LOCAL_PATH]}"
+  step "Preparing file storage"
+  as_root mkdir -p "$STORAGE_PATH/objects" "$STORAGE_PATH/meta"
+  as_root chown -R "$SERVICE_USER":"$SERVICE_GROUP" "$STORAGE_PATH"
+  # Uploads include staff records and evidence; keep them off other accounts.
+  as_root chmod 750 "$STORAGE_PATH"
+  ok "Uploads will be stored in $STORAGE_PATH (owned by $SERVICE_USER)"
+  note "Back this directory up alongside MongoDB — it is not reproducible."
+fi
 
 if (( ENV_ONLY )); then
   printf '\n%s.env written. Re-run without --env-only to build and start.%s\n\n' "$GREEN" "$RESET"
@@ -545,6 +598,7 @@ install_unit() { # install_unit <name>
       -e "s#__SERVICE_GROUP__#$SERVICE_GROUP#g" \
       -e "s#__NPM_BIN__#$NPM_BIN#g" \
       -e "s#__NODE_BIN_DIR__#$(dirname "$NPM_BIN")#g" \
+      -e "s#__STORAGE_PATH__#$STORAGE_PATH#g" \
       -e "s#__PANEL_PORT__#$PANEL_PORT#g" \
       -e "s#__API_PORT__#$API_PORT#g" \
       "$src" > "$tmp"
@@ -628,6 +682,11 @@ printf '\n%s  ReAdmin is installed.%s\n\n' "$BOLD$GREEN" "$RESET"
 info "Panel  ${VALUES[NEXT_PUBLIC_PANEL_URL]}   (local port $PANEL_PORT)"
 info "API    ${VALUES[NEXT_PUBLIC_API_URL]}   (local port $API_PORT)"
 info "Config $ENV_FILE"
+if [[ "${VALUES[STORAGE_DRIVER]}" == "local" ]]; then
+  info "Files  $STORAGE_PATH   (on this server — include it in your backups)"
+else
+  info "Files  ${VALUES[CDN_BUCKET_NAME]:-bucket} at ${VALUES[CDN_ENDPOINT]}"
+fi
 
 if (( SERVICES_INSTALLED )); then
   printf '\n  %sManaging it%s\n' "$BOLD" "$RESET"
