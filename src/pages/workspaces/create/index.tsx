@@ -5,6 +5,7 @@ import { ReactElement, useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '~/components/page_components/DashboardLayout';
 import { useUser } from '~/components/contexts/user';
 import { getBaseUrl, RouterOutput, trpc } from '~/utils/trpc';
+import { ROBLOX_OAUTH_CLIENT_ID } from '~/utils/robloxOAuth';
 import Dropdown from '~/components/forms/Dropdown';
 import { ArrayToValueType } from '~/server/routers/_app';
 import { GroupRole } from '~/services/types/roblox.types';
@@ -423,7 +424,7 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
                 variant="primary"
                 size="medium"
                 className='w-full mt-4'
-                href={`https://authorize.roblox.com/?client_id=8369795969584799403&response_type=Code&scope=${[
+                href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&scope=${[
                   'openid',
                   'profile',
                   'group:read',

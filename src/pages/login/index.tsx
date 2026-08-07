@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from 'react';
 import { getBaseUrl } from '~/utils/trpc';
+import { ROBLOX_OAUTH_CLIENT_ID } from '~/utils/robloxOAuth';
 //@ts-expect-error ahh its eight
 import * as THREE from "~/components/vanta/three";
 //@ts-expect-error ahh its eight
@@ -65,7 +66,7 @@ export default function Page() {
 
       <div className="max-w-sm w-full self-center mt-4 justify-center flex flex-col">
         <div className='flex flex-col gap-4'>
-          <Button href={`https://authorize.roblox.com/?client_id=8369795969584799403&response_type=Code&redirect_uri=${encodeURI(`${baseUrl}/auth/roblox`)}&scope=${[
+          <Button href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&redirect_uri=${encodeURI(`${baseUrl}/auth/roblox`)}&scope=${[
             'openid',
             'profile',
             'group:read'

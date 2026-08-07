@@ -50,6 +50,21 @@ const envSchema = z.object({
   // readmin.app). Enables the workspace data import tooling. Left unset, it is
   // inferred — see utils/deployment.ts.
   SELF_HOSTED: z.string().optional(),
+  // Self-hosting: the public URLs of this deployment. When set they replace the
+  // readmin.app defaults, so the panel calls your API instead of ours. Both are
+  // read at build time — see utils/trpc.ts. install.sh writes them.
+  NEXT_PUBLIC_PANEL_URL: z.string().optional(),
+  NEXT_PUBLIC_API_URL: z.string().optional(),
+  // Self-hosting: your own Roblox OAuth app, used to build the authorize URL in
+  // the browser. Must match ROBLOX_CLIENT_ID. Defaults to ReAdmin's own app,
+  // which will not accept your redirect URIs — see utils/robloxOAuth.ts.
+  NEXT_PUBLIC_ROBLOX_CLIENT_ID: z.string().optional(),
+  // Self-hosting: comma-separated origins the API accepts cross-origin requests
+  // from. Replaces the built-in per-environment allowlist in fastifyAPI/index.ts.
+  CORS_ORIGINS: z.string().optional(),
+  // Self-hosting: extra space-separated hosts appended to the panel's
+  // Content-Security-Policy — your panel, API and CDN domains. See next.config.js.
+  CSP_EXTRA_DOMAINS: z.string().optional(),
   // OpenSearch (optional — when set, powers Roblox user search).
   OPENSEARCH_URL: z.string().optional(),
   OPENSEARCH_USERNAME: z.string().optional(),

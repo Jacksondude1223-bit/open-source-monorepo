@@ -1,0 +1,32 @@
+[Unit]
+Description=ReAdmin sync worker (node-cron jobs)
+Documentation=https://github.com/Jacksondude1223-bit/open-source-monorepo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+# npm shells out to `node`, and systemd's default PATH may not include it.
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+ExecStart=__NPM_BIN__ run sync:start
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=readmin-sync
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=__APP_DIR__
+
+[Install]
+WantedBy=multi-user.target
+
+# Run EXACTLY ONE of these. The cron jobs are not sharded, so a second instance
+# duplicates ranking actions, Discord DMs and distributions.

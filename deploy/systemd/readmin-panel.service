@@ -1,0 +1,33 @@
+[Unit]
+Description=ReAdmin panel (Next.js UI + SSR)
+Documentation=https://github.com/Jacksondude1223-bit/open-source-monorepo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_GROUP__
+WorkingDirectory=__APP_DIR__
+# Order matters: Environment= is applied after EnvironmentFile=, so PORT here
+# wins over anything in .env. That is what lets all three units share one file.
+EnvironmentFile=__APP_DIR__/.env
+# npm shells out to `node`, and systemd's default PATH may not include it.
+Environment=PATH=__NODE_BIN_DIR__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+Environment=PORT=__PANEL_PORT__
+ExecStart=__NPM_BIN__ run start
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=readmin-panel
+
+# Hardening. The app only ever writes to its own directory (Next's cache).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=__APP_DIR__
+
+[Install]
+WantedBy=multi-user.target

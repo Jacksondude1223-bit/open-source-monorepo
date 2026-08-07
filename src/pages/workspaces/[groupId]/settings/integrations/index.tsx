@@ -6,6 +6,7 @@ import LoadingPage from '~/components/layouts/LoadingPage';
 import PageHeading from '~/components/layouts/PageHeading';
 import { useRouter } from 'next/router';
 import { getBaseUrl, trpc } from '~/utils/trpc';
+import { ROBLOX_OAUTH_CLIENT_ID } from '~/utils/robloxOAuth';
 import LinkDiscord from '~/components/page_components/workspaces/settings/integrations/LinkDiscord';
 import DiscordLinkage from '~/components/page_components/workspaces/settings/integrations/DiscordLinkage';
 import LoadingAnimation from '~/components/ui/LoadingAnimation';
@@ -112,7 +113,7 @@ export default function DashboardPage() {
                     className="w-full sm:w-auto"
                     variant={'primary'}
                     size="medium"
-                    href={`https://authorize.roblox.com/?client_id=8369795969584799403&response_type=Code&scope=${[
+                    href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&scope=${[
                       'openid',
                       'profile',
                       'group:read',
@@ -211,7 +212,7 @@ export default function DashboardPage() {
                     className="w-full sm:w-auto"
                     variant={'primary'}
                     size="medium"
-                    href={`https://authorize.roblox.com/?client_id=8369795969584799403&response_type=Code&scope=${[
+                    href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&scope=${[
                       'openid',
                       'profile',
                       // 'universe-messaging-service:publish',

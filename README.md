@@ -12,6 +12,50 @@ DigitalOcean App Platform (the setup the hosted service runs on).
 > [deployment.ts](src/utils/deployment.ts) — and unlocks the workspace **import** tooling so you can
 > restore a bundle exported from the hosted site.
 
+## Quick start — one command on a VPS
+
+If you have a Linux VPS and the credentials from [§2](#2-required-services) to hand, the installer
+does the rest:
+
+```bash
+git clone https://github.com/Jacksondude1223-bit/open-source-monorepo.git readmin
+cd readmin
+sudo ./install.sh
+```
+
+or, without cloning first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Jacksondude1223-bit/open-source-monorepo/master/install.sh | sudo bash
+```
+
+[install.sh](install.sh) installs Node 24, asks for every credential one at a time, writes a `0600`
+`.env`, generates `CRYPTO_KEY` and `JSON_WEB_TOKEN_SECRET` for you, builds the panel and the API,
+and registers all three processes as systemd services — `readmin-panel`, `readmin-api` and
+`readmin-sync`. It also writes an nginx config for the two hostnames.
+
+It is safe to re-run: every existing `.env` value comes back as the default, and `CRYPTO_KEY` is
+never regenerated (that would invalidate every stored OAuth token). To update later:
+
+```bash
+git pull && sudo ./install.sh --yes
+```
+
+| Flag | Effect |
+| --- | --- |
+| `--yes` / `-y` | Accept confirmations; still asks for credentials that have no value yet |
+| `--env-only` | Run the credential wizard, write `.env`, stop |
+| `--non-interactive` | Never prompt; requires a complete `.env` already. Good for re-deploys |
+| `--skip-node` / `--skip-deps` / `--skip-build` / `--skip-services` | Skip that stage |
+| `--service-user USER` | Run the services as `USER` (default: whoever owns the checkout) |
+
+**It does not do everything.** You still have to point DNS at the box, add TLS
+(`sudo certbot --nginx -d panel.example.com -d api.example.com`), register the OAuth redirect URIs
+it prints, and publish your own copies of the in-game Roblox modules ([§6.1](#61-the-in-game-roblox-modules)).
+The rest of this document explains what the installer is asking you for and why.
+
+---
+
 ## What standing this up involves
 
 Read in order — each section assumes the previous one. Skip to §4 if you only want to run it locally.
@@ -254,6 +298,10 @@ Note that `@mui/x-data-grid` and `@mui/x-data-grid-pro` are both listed in `tran
 | `BLOXLINK_TOKEN` | ✅ | Bloxlink API v4 token |
 | `OPENSEARCH_URL` / `OPENSEARCH_USERNAME` / `OPENSEARCH_PASSWORD` | Optional | Omit to disable OpenSearch |
 | `SELF_HOSTED` | Optional | `true` on any non-`readmin.app` deployment. Enables workspace import. Inferred if unset. |
+| `NEXT_PUBLIC_PANEL_URL` / `NEXT_PUBLIC_API_URL` | ✅ when self-hosting | Your own panel and API URLs. Set, they replace the `readmin.app` defaults in [trpc.ts](src/utils/trpc.ts) whatever `NEXT_PUBLIC_VERCEL_ENV` says. Read at **build** time. |
+| `NEXT_PUBLIC_ROBLOX_CLIENT_ID` | ✅ when self-hosting | Your Roblox OAuth app, used to build the authorize URL in the browser. Must equal `ROBLOX_CLIENT_ID`. Defaults to ReAdmin's app, which will not accept your redirect URIs. |
+| `CORS_ORIGINS` | ✅ when self-hosting | Comma-separated origins the API accepts. Replaces the built-in allowlist in [fastifyAPI/index.ts](src/fastifyAPI/index.ts). At minimum your panel URL. |
+| `CSP_EXTRA_DOMAINS` | ✅ when self-hosting | Space-separated hosts appended to the panel's CSP — panel, API and CDN. Without them the browser blocks your own assets. |
 | `APP_NAME` | Optional | `panel` (default) or `lambda`; only tags the Mongo connection |
 | `PORT` | Set by platform | API defaults to 3001, panel to 3000 |
 | `ROBLOX_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `CONTIGUITY_SECRET` | ✅ (unused) | Placeholders — see §2.3 |
@@ -270,6 +318,9 @@ the complete server environment is present at build time**, not just at runtime.
 nvm use 24          # or any Node 24 toolchain
 npm install
 ```
+
+`./install.sh --env-only` walks you through the whole variable list and writes the `.env` for you,
+if you would rather not assemble one by hand.
 
 Create a `.env` at the repo root with every variable from §3. `NODE_ENV=development`, and leave
 `NEXT_PUBLIC_VERCEL_ENV` unset so the tRPC client targets `http://localhost:3001` and the API's CORS
@@ -295,6 +346,10 @@ npm run fastify:build    # API typecheck + emit to ./apiBuild
 
 > `npm run lint` does not work: ESLint 10 requires a flat `eslint.config.js` and this repo still has
 > a legacy `.eslintrc`. Use the two typechecks above instead.
+>
+> `npm test` does not work either: [jest.config.ts](jest.config.ts) imports `tsconfig.json` as an ES
+> module without an import attribute, which Node ≥22 rejects (`ERR_IMPORT_ATTRIBUTE_MISSING`) before
+> a single test runs. Unrelated to the installer, which never invokes it.
 
 ---
 
@@ -379,17 +434,26 @@ packages, or leave image generation unused.
 
 ## 6. Hardcoded values you must change when self-hosting
 
-These are **not** environment variables. A self-hosted deployment will misbehave — or point at
-ReAdmin's own infrastructure — until they are edited.
+A self-hosted deployment will misbehave — or point at ReAdmin's own infrastructure — until these are
+dealt with. Most are now environment variables, which [install.sh](install.sh) fills in for you; the
+last two are not, and no installer can do them for you.
 
-**Must change, or the deployment does not work:**
+**Environment variables, set by the installer (or by hand — see §3):**
+
+| Setting | What it replaces | Why it matters |
+| --- | --- | --- |
+| `NEXT_PUBLIC_PANEL_URL` / `NEXT_PUBLIC_API_URL` | Panel and API base URLs in [trpc.ts](src/utils/trpc.ts) | Unset, `NEXT_PUBLIC_VERCEL_ENV=production` makes the panel call `https://api.readmin.app`. |
+| `CORS_ORIGINS` | The allowlist in [fastifyAPI/index.ts](src/fastifyAPI/index.ts) | Your panel origin must be listed or every request is blocked. |
+| `CSP_EXTRA_DOMAINS` | Additions to the CSP in [next.config.js](next.config.js) | Without your own domains the browser blocks your assets and API calls. |
+| `NEXT_PUBLIC_ROBLOX_CLIENT_ID` | The default client ID in [robloxOAuth.ts](src/utils/robloxOAuth.ts) | The authorize URL is built in the browser. Login fails until it names *your* Roblox app. |
+
+All four are read at **build** time, so changing one means rebuilding (`sudo ./install.sh --yes`,
+or `npm run build`) — restarting the services is not enough.
+
+**Still genuinely hardcoded — you must edit or republish these yourself:**
 
 | Location | What it is | Why it matters |
 | --- | --- | --- |
-| [trpc.ts:14-29](src/utils/trpc.ts#L14-L29) | Panel and API base URLs keyed by `NEXT_PUBLIC_VERCEL_ENV` | With `NEXT_PUBLIC_VERCEL_ENV=production` the panel calls `https://api.readmin.app`. Replace with your own hostnames. |
-| [fastifyAPI/index.ts:28-36](src/fastifyAPI/index.ts#L28-L36) | CORS allowlist | Your panel domain must be listed or every request is blocked. |
-| [next.config.js:48](next.config.js#L48) | Content-Security-Policy allowlist | Add your panel/API/CDN domains or the browser blocks your own assets and API calls. |
-| [login/index.tsx:68](src/pages/login/index.tsx#L68), [workspaces/create/index.tsx:426](src/pages/workspaces/create/index.tsx#L426), [settings/integrations/index.tsx:115](src/pages/workspaces/%5BgroupId%5D/settings/integrations/index.tsx#L115) and `:214` | Roblox OAuth `client_id=8369795969584799403` | The authorize URL is built client-side with ReAdmin's client ID; swap in yours (it must match `ROBLOX_CLIENT_ID`). Login fails until you do. |
 | [downloads/index.tsx:2528](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2528) and [:2903](src/pages/workspaces/%5BgroupId%5D/settings/downloads/index.tsx#L2903) | `require()` asset IDs for the two in-game Roblox modules | Nothing in-game works until you publish your own copies. **See §6.1** — this one is a Studio job, not a code edit. |
 
 **Blank placeholders — fill in only if you want the feature:**
