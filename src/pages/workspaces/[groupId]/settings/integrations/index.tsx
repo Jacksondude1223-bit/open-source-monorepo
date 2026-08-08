@@ -119,7 +119,7 @@ export default function DashboardPage() {
                       'group:read',
                       'group:write',
                       'legacy-group:manage'
-                    ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURI(`${getBaseUrl()}/auth/roblox`)}&state=workspaceLink:${workspace.groupId}`}
+                    ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURIComponent(`${getBaseUrl()}/auth/roblox`)}&state=workspaceLink:${workspace.groupId}`}
                   >
                     {robloxLinked ? 'Relink Open Cloud' : 'Link Open Cloud'}
                   </Button>
@@ -219,7 +219,7 @@ export default function DashboardPage() {
                       'group:read',
                       'group:write',
                       'legacy-group:manage'
-                    ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURI(`${getBaseUrl()}/auth/roblox`)}&state=workspaceLink:${workspace.groupId}`}
+                    ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURIComponent(`${getBaseUrl()}/auth/roblox`)}&state=workspaceLink:${workspace.groupId}`}
                   >
                     {robloxLinked ? 'Relink Open Cloud' : 'Link Open Cloud'}
                   </Button>

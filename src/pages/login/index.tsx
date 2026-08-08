@@ -66,12 +66,12 @@ export default function Page() {
 
       <div className="max-w-sm w-full self-center mt-4 justify-center flex flex-col">
         <div className='flex flex-col gap-4'>
-          <Button href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&redirect_uri=${encodeURI(`${baseUrl}/auth/roblox`)}&scope=${[
+          <Button href={`https://authorize.roblox.com/?client_id=${ROBLOX_OAUTH_CLIENT_ID}&response_type=Code&redirect_uri=${encodeURIComponent(`${baseUrl}/auth/roblox`)}&scope=${[
             'openid',
             'profile',
             'group:read'
           ].map(scope => encodeURIComponent(scope)).join('+')}&step=landing${state ? `&state=${encodeURIComponent(state as string)}` : ''}`} icon={RobloxIcon} variant="discrete" className=''>Login with Roblox</Button>
-          <Button href={`https://discord.com/oauth2/authorize?client_id=${process.env?.NEXT_PUBLIC_DISCORD_CLIENT_ID}&response_type=code&scope=identify&redirect_uri=${encodeURI(`${baseUrl}/auth/discord`)}${state ? `&state=${encodeURIComponent(state as string)}` : ''}`} icon={DiscordIcon} variant="discrete" className=''>Login with Discord</Button>
+          <Button href={`https://discord.com/oauth2/authorize?client_id=${process.env?.NEXT_PUBLIC_DISCORD_CLIENT_ID}&response_type=code&scope=identify&redirect_uri=${encodeURIComponent(`${baseUrl}/auth/discord`)}${state ? `&state=${encodeURIComponent(state as string)}` : ''}`} icon={DiscordIcon} variant="discrete" className=''>Login with Discord</Button>
         </div>
 
         <p className="text-gray-500 text-center text-sm mt-4">By using ReAdmin you agree to our <a href="https://readmin.app/legal/terms">Terms of Service</a>, and <a href="https://readmin.app/legal/privacy">Privacy Policy</a>.</p>
