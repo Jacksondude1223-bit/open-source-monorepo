@@ -17,6 +17,7 @@ import AuthedAlerts, { WorkspaceBanners } from '../page_components/alerts'
 import posthog from 'posthog-js'
 import { BrandColors } from '~/services/NewMongoTypes/Workspace.type'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { BRAND_MARK_DARK } from '~/utils/brand';
 
 
 export default function AuthedLayout({
@@ -186,7 +187,7 @@ export default function AuthedLayout({
                       <img
                         className={`w-auto ${!(overwriteImage == false || overwriteImage == undefined || !overwriteImage) ? 'rounded-lg h-14 mt-2 max-h-14 max-w-14' : 'h-8'}`}
                         src={(overwriteImage == false || overwriteImage == undefined || !overwriteImage)
-                          ? `https://cdn.readmin.app/readmin-public/RA-White-RA.png`
+                          ? `${BRAND_MARK_DARK}`
                           : overwriteImage}
                         alt="ReAdmin"
                       />
@@ -301,7 +302,7 @@ export default function AuthedLayout({
                 <img
                   className={`w-auto ${!(overwriteImage == false || overwriteImage == undefined || !overwriteImage) ? `rounded-lg ${collapsed ? 'h-9' : 'h-14 mt-2'}` : 'h-8'}`}
                   src={(overwriteImage == false || overwriteImage == undefined || !overwriteImage)
-                    ? `https://cdn.readmin.app/readmin-public/RA-White-RA.png`
+                    ? `${BRAND_MARK_DARK}`
                     : overwriteImage}
                   alt="ReAdmin"
                 />

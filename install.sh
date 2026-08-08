@@ -709,6 +709,20 @@ trap 'rm -f "$TMP_ENV"' EXIT
   for key in "${ENV_ORDER[@]}"; do
     [[ -n "${VALUES[$key]+x}" ]] && env_line "$key" "${VALUES[$key]}"
   done
+
+  # Anything already in .env that this script does not ask about — brand assets,
+  # a hand-tuned override, a variable added by a later version — is carried
+  # through untouched. Without this a re-run silently deletes it, and the loss
+  # only shows up as behaviour quietly reverting.
+  preserved=0
+  for key in "${!CURRENT[@]}"; do
+    [[ -n "${VALUES[$key]+x}" ]] && continue
+    if (( preserved == 0 )); then
+      printf '\n# Kept from your previous .env — install.sh does not manage these.\n'
+      preserved=1
+    fi
+    env_line "$key" "${CURRENT[$key]}"
+  done
 } > "$TMP_ENV"
 
 if [[ -f "$ENV_FILE" ]]; then

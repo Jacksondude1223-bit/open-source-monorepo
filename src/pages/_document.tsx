@@ -4,6 +4,7 @@ import {
   DocumentHeadTags,
   documentGetInitialProps,
 } from '@mui/material-nextjs/v15-pagesRouter';
+import { BRAND_APPLE_TOUCH_ICON, BRAND_FAVICON_16, BRAND_FAVICON_32 } from '~/utils/brand';
 
 // Blocking script to apply dark mode before first paint, preventing white flash
 const darkModeScript = `
@@ -24,9 +25,9 @@ export default function Document(props?: any) {
     <Html className="h-screen bg-white dark:bg-gray-900 dark:text-gray-100">
       <Head>
         <script dangerouslySetInnerHTML={{ __html: darkModeScript }} />
-        <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.readmin.app/readmin-public/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="https://cdn.readmin.app/readmin-public/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="https://cdn.readmin.app/readmin-public/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href={BRAND_APPLE_TOUCH_ICON} />
+        <link rel="icon" type="image/png" sizes="32x32" href={BRAND_FAVICON_32} />
+        <link rel="icon" type="image/png" sizes="16x16" href={BRAND_FAVICON_16} />
         <link rel="manifest" href="/site.webmanifest" />
         <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
         <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#000000" />

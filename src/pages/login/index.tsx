@@ -11,6 +11,7 @@ import { DiscordIcon, RobloxIcon } from '~/components/icons';
 import { useRouter } from 'next/router';
 import { Alert } from '~/components/page_components/alerts';
 import Link from 'next/link';
+import { BRAND_MARK_DARK } from '~/utils/brand';
 
 export default function Page() {
   const [vantaEffect, setVantaEffect] = useState<any>(0);
@@ -56,7 +57,7 @@ export default function Page() {
       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
         <img
           className="mx-auto h-10 w-auto"
-          src="https://cdn.readmin.app/readmin-public/RA-White-RA.png"
+          src={BRAND_MARK_DARK}
           alt="ReAdmin"
         />
         <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-white">

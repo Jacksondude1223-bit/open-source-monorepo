@@ -17,6 +17,7 @@ import Card from '~/components/ui/Card';
 import Header from '~/components/NextGenStyles/Header';
 import Small from '~/components/NextGenStyles/Small';
 import { DEPARTMENT_TEMPLATES } from '~/services/constants/DepartmentTemplates';
+import { BRAND_MARK_DARK } from '~/utils/brand';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -201,7 +202,7 @@ export default function DashboardPage() {
                     </h3>
                     {department?.isAddedBySupport && (
                       <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                        <img src="https://cdn.readmin.app/readmin-public/RA-White-RA.png" className="h-3 mr-1" alt="Support" />Support
+                        <img src={BRAND_MARK_DARK} className="h-3 mr-1" alt="Support" />Support
                       </span>
                     )}
                   </div>

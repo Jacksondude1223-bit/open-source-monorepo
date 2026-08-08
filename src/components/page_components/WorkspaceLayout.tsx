@@ -15,6 +15,7 @@ import Link from 'next/link';
 import JSONPretty from 'react-json-pretty';
 import LoadingPage from '../layouts/LoadingPage';
 import PageSkeleton from '~/components/ui/PageSkeleton';
+import { BRAND_WORDMARK_DARK } from '~/utils/brand';
 
 type DefaultLayoutProps = { children: ReactNode, disableMl?: boolean };
 
@@ -82,7 +83,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       >
         <Head>
           <title>ReAdmin</title>
-          <link rel="icon" href={workspaceLogo || "https://cdn.readmin.app/readmin-public/RA-White.png"} />
+          <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
         <PageSkeleton sections={3} className="mx-8 mt-6" />
@@ -98,7 +99,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       >
         <Head>
           <title>ReAdmin</title>
-          <link rel="icon" href={workspaceLogo || "https://cdn.readmin.app/readmin-public/RA-White.png"} />
+          <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
         <main className="flex min-h-[70vh] items-center justify-center px-4 py-12">
@@ -159,7 +160,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       >
         <Head>
           <title>ReAdmin</title>
-          <link rel="icon" href={workspaceLogo || "https://cdn.readmin.app/readmin-public/RA-White.png"} />
+          <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
         <main>
@@ -357,7 +358,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       >
         <Head>
           <title>ReAdmin</title>
-          <link rel="icon" href={workspaceLogo || "https://cdn.readmin.app/readmin-public/RA-White.png"} />
+          <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
         {workspace.banStatus.bannedBy == 'billing' ? (
@@ -389,7 +390,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
     >
       <Head>
         <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName} {nav.find(p => p.current)?.name || ''}</title>
-        <link rel="icon" href={workspaceLogo || "https://cdn.readmin.app/readmin-public/RA-White.png"} />
+        <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
       </Head>
 
       {/* <CommandMenu /> */}

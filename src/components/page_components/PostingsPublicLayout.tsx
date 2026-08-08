@@ -3,11 +3,12 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { ReactNode } from 'react';
 import { useUser } from '~/components/contexts/user';
+import { BRAND_WORDMARK_DARK, BRAND_WORDMARK_LIGHT } from '~/utils/brand';
 
 /** Canonical public host the postings pages are served from. */
 export const POSTINGS_SITE_BASE = 'https://panel.readmin.app';
 
-const DEFAULT_OG_IMAGE = 'https://cdn.readmin.app/readmin-public/RA-Black.png';
+const DEFAULT_OG_IMAGE = BRAND_WORDMARK_LIGHT;
 
 /** SEO metadata for a postings page. */
 export type PostingsSeo = {
@@ -69,7 +70,7 @@ export const PostingsPublicLayout = ({ children, title, seo, branding }: Posting
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <Head>
         <title>{pageTitle}</title>
-        <link rel="icon" href={customLogo || 'https://cdn.readmin.app/readmin-public/RA-White.png'} />
+        <link rel="icon" href={customLogo || BRAND_WORDMARK_DARK} />
         <meta name="robots" content={robots} />
         {description && <meta name="description" content={description} />}
         {canonical && <link rel="canonical" href={canonical} />}
@@ -107,12 +108,12 @@ export const PostingsPublicLayout = ({ children, title, seo, branding }: Posting
             ) : (
               <>
                 <img
-                  src="https://cdn.readmin.app/readmin-public/RA-Black.png"
+                  src={BRAND_WORDMARK_LIGHT}
                   alt="ReAdmin"
                   className="h-7 w-auto block dark:hidden"
                 />
                 <img
-                  src="https://cdn.readmin.app/readmin-public/RA-White.png"
+                  src={BRAND_WORDMARK_DARK}
                   alt="ReAdmin"
                   className="h-7 w-auto hidden dark:block"
                 />
