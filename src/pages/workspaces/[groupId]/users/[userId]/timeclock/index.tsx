@@ -19,6 +19,7 @@ import Small from '~/components/NextGenStyles/Small';
 import { useWorkspace } from '~/components/contexts/workspace';
 import { trpc } from '~/utils/trpc';
 import { formatDurationMinutes, formatEntryTime, toDatetimeLocalValue } from '~/utils/formatDuration';
+import { BRAND_NAME } from '~/utils/brand';
 
 type Entry = {
   _id?: any;
@@ -68,7 +69,7 @@ export default function UserTimeclockPage() {
   return (
     <>
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Timeclock</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Timeclock</title>
       </Head>
 
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out flex flex-col gap-6">

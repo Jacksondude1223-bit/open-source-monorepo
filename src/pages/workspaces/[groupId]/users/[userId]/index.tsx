@@ -24,6 +24,7 @@ import UserPersonalDetailsPanel from '~/components/ui/UserPersonalDetailsPanel';
 import Head from 'next/head';
 import toast from 'react-hot-toast';
 import { openCallDrawer } from '~/components/ui/callDrawerBus';
+import { BRAND_NAME } from '~/utils/brand';
 
 export const ARRAY_OF_ZERO_THIRTEEN_TIMES: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -138,7 +139,7 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Info</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Info</title>
       </Head>
 
       <div className='animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out flex flex-col gap-6'>

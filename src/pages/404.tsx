@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { PropsWithChildren } from 'react';
 import { DefaultLayout } from '~/components/DefaultLayout';
 import { DashboardLayout } from '~/components/page_components/DashboardLayout';
+import { BRAND_WORDMARK_LIGHT } from '~/utils/brand';
 export default function NotFound() {
   const router = useRouter();
   const path = router.asPath;
@@ -30,7 +31,7 @@ export default function NotFound() {
           {unauthenticated && (
             <div className="flex shrink-0 justify-center">
               <img
-                src="https://cdn.readmin.app/readmin-public/RA-Black.png"
+                src={BRAND_WORDMARK_LIGHT}
                 alt="ReAdmin Logo"
                 className="max-w-sm"
               />

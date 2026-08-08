@@ -11,6 +11,7 @@ import * as THREE from "~/components/vanta/three";
 import NET from '~/components/vanta/vanta';
 import Link from 'next/link';
 import { getBaseUrl } from '~/utils/trpc';
+import { BRAND_MARK_DARK } from '~/utils/brand';
 
 export const getServerSideProps: GetServerSideProps = async (context) => {
     return new Promise(async (resolve) => {
@@ -127,7 +128,7 @@ export default function Page(props: PropsWithChildren<{ code: string; userId: st
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
                 <img
                     className="mx-auto h-10 w-auto"
-                    src="https://cdn.readmin.app/readmin-public/RA-White-RA.png"
+                    src={BRAND_MARK_DARK}
                     alt="ReAdmin"
                 />
                 <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-white">

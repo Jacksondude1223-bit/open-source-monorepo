@@ -38,6 +38,7 @@ import { GetServerSideProps } from 'next';
 import { SHUTDOWN_INFO_URL } from '~/services/constants/Subscriptions';
 import { isShutdownDeployment } from '~/utils/deployment';
 import { ArrowTopRightOnSquareIcon } from '@heroicons/react/20/solid';
+import { BRAND_MARK_LIGHT, BRAND_WORDMARK_DARK, BRAND_WORDMARK_LIGHT } from '~/utils/brand';
 
 /** Outcome-led premium feature showcase for the create flow's right panel. */
 type CreateFeature = {
@@ -353,12 +354,12 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
 
         <div className="fade-in animate-in slide-in-from-top relative z-10 w-full max-w-2xl text-center duration-700">
           <img
-            src="https://cdn.readmin.app/readmin-public/RA-Black.png"
+            src={BRAND_WORDMARK_LIGHT}
             className="mx-auto h-10 w-auto dark:hidden"
             alt="ReAdmin"
           />
           <img
-            src="https://cdn.readmin.app/readmin-public/RA-White.png"
+            src={BRAND_WORDMARK_DARK}
             className="mx-auto hidden h-10 w-auto dark:block"
             alt="ReAdmin"
           />
@@ -415,7 +416,7 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
         <div ref={vantaRef} className={`${(isCreatingHidden || needsOAuthLink) ? 'justify-center' : ''} flex flex-col fade-in animate-in duration-1000 w-full h-full px-6 py-7 2xl:py-12 2xl:px-24 bg-blue-950 min-h-screen max-h-screen`}>
           {needsOAuthLink ? ( // Open Cloud must be linked before the workspace can sync.
             <div className="fade-in animate-in slide-in-from-top duration-1000 flex flex-col bg-white shadow-lg rounded-lg px-6 py-4 self-center align-middle max-w-xl">
-              <img src="https://cdn.readmin.app/readmin-public/ra-black-ra.png" className='w-20 h-auto self-center' alt="ReAdmin logo" />
+              <img src={BRAND_MARK_LIGHT} className='w-20 h-auto self-center' alt="ReAdmin logo" />
               <h1 className="mt-4 font-bold text-black text-2xl text-center">One last step: Link your Roblox integration</h1>
               <p className="text-gray-700 mt-2 text-sm text-center">
                 ReAdmin relies on Roblox Open Cloud to read {`${group?.group?.displayName || 'your group'}'s`}{' '}members, roles, and other Roblox data, and to perform actions within Roblox. We can&apos;t finish setting up your workspace until it&apos;s linked.
@@ -438,7 +439,7 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
             </div>
           ) : isCreatingHidden == false ? ( // Workspace is still syncing
             <div className={`${isCreated == true ? 'fade-out animate-out slide-out-to-top duration-1000' : ''}`}>
-              <img src="https://cdn.readmin.app/readmin-public/ra-black-ra.png" className='w-24 h-auto' alt="ReAdmin logo" />
+              <img src={BRAND_MARK_LIGHT} className='w-24 h-auto' alt="ReAdmin logo" />
               <h1 className="mt-4 font-bold text-black text-4xl">We are setting up {`${group?.group?.displayName}'s` || 'your'} workspace</h1>
               <p className="mt-2 text-lg font-light text-black">This wont take long, we&apos;ve got to sync your group roles, and members. You&apos;ll be going in no time.</p>
             </div>
@@ -481,12 +482,12 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
 
           <div className="relative z-10">
             <img
-              src="https://cdn.readmin.app/readmin-public/RA-Black.png"
+              src={BRAND_WORDMARK_LIGHT}
               className="h-9 w-auto dark:hidden"
               alt="ReAdmin"
             />
             <img
-              src="https://cdn.readmin.app/readmin-public/RA-White.png"
+              src={BRAND_WORDMARK_DARK}
               className="hidden h-9 w-auto dark:block"
               alt="ReAdmin"
             />

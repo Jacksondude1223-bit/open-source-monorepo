@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { ReactNode } from 'react';
 import AuthedLayout from '~/components/layouts/PageLayout';
+import { BRAND_NAME, BRAND_WORDMARK_DARK } from '~/utils/brand';
 
 type DefaultLayoutProps = { children: ReactNode; disableMl?: boolean };
 
@@ -21,8 +22,8 @@ export const DashboardLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       ]}
     >
       <Head>
-        <title>ReAdmin - Dashboard</title>
-        <link rel="icon" href="https://cdn.readmin.app/readmin-public/RA-White.png" />
+        <title>{`${BRAND_NAME} - Dashboard`}</title>
+        <link rel="icon" href={BRAND_WORDMARK_DARK} />
       </Head>
 
       <main>{children}</main>

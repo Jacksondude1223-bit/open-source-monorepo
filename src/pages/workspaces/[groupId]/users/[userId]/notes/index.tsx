@@ -16,6 +16,7 @@ import ReadFile from "~/utils/FileReader";
 import { useWorkspace } from '~/components/contexts/workspace';
 import { trpc } from '~/utils/trpc';
 import { Attachment } from '../../..';
+import { BRAND_NAME } from '~/utils/brand';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Notes</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Notes</title>
       </Head>
 
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">
