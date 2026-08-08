@@ -360,10 +360,11 @@ done
 install_packages() {
   case "$PKG" in
     apt-get)
-      as_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq \
-        && as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@"
+      as_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null \
+        && as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+             -o Dpkg::Use-Pty=0 "$@" >/dev/null
       ;;
-    dnf|yum) as_root "$PKG" install -y -q "$@" ;;
+    dnf|yum) as_root "$PKG" install -y -q "$@" >/dev/null ;;
     *) return 1 ;;
   esac
 }
@@ -517,8 +518,64 @@ note "The panel and the API must be on different hostnames or ports."
 ask_port_var READMIN_PANEL_PORT "Local port for the panel" "3000"
 ask_port_var READMIN_API_PORT "Local port for the API" "3001"
 PANEL_PORT="${VALUES[READMIN_PANEL_PORT]}"; API_PORT="${VALUES[READMIN_API_PORT]}"
-ask_url_var NEXT_PUBLIC_PANEL_URL "Public URL of the panel" "http://${PUBLIC_IP}:${PANEL_PORT}"
-ask_url_var NEXT_PUBLIC_API_URL "Public URL of the API" "http://${PUBLIC_IP}:${API_PORT}"
+
+# HTTPS is asked here, not at the end, because the answer changes the URLs that
+# get written to .env — and those are baked into the panel at build time. Asking
+# after the build would mean building twice.
+note ""
+note "HTTPS needs two hostnames already pointing at this server. Without it the"
+note "panel runs on plain HTTP, which Discord and Roblox OAuth usually refuse,"
+note "and logins travel unencrypted."
+ask_var READMIN_TLS "Get free HTTPS certificates with Let's Encrypt? 1 = yes, 2 = no" "1"
+case "${VALUES[READMIN_TLS],,}" in
+  1|y|yes|true) set_var READMIN_TLS 'true' ;;
+  2|n|no|false) set_var READMIN_TLS 'false' ;;
+esac
+while [[ "${VALUES[READMIN_TLS]}" != "true" && "${VALUES[READMIN_TLS]}" != "false" ]]; do
+  warn "Answer 1 (yes) or 2 (no)."
+  { (( NON_INTERACTIVE )) || ! have_tty; } && die "READMIN_TLS must be 1/yes or 2/no."
+  ask_var READMIN_TLS "Get free HTTPS certificates with Let's Encrypt? 1 = yes, 2 = no" "1"
+  case "${VALUES[READMIN_TLS],,}" in
+    1|y|yes|true) set_var READMIN_TLS 'true' ;;
+    2|n|no|false) set_var READMIN_TLS 'false' ;;
+  esac
+done
+
+# A certificate can only be issued for a name, never for a bare address.
+is_ip_literal() { [[ "$1" =~ ^[0-9]+(\.[0-9]+){3}$ || "$1" == *:* ]]; }
+
+if [[ "${VALUES[READMIN_TLS]}" == "true" ]]; then
+  while true; do
+    ask_var READMIN_PANEL_HOST "Panel hostname (e.g. panel.example.com)" ""
+    ask_var READMIN_API_HOST "API hostname (e.g. api.example.com)" ""
+    local_bad=0
+    for candidate in "${VALUES[READMIN_PANEL_HOST]}" "${VALUES[READMIN_API_HOST]}"; do
+      if is_ip_literal "$candidate"; then
+        warn "$candidate is an IP address. Let's Encrypt only issues for hostnames."
+        local_bad=1
+      elif [[ "$candidate" != *.* ]]; then
+        warn "$candidate does not look like a domain name."
+        local_bad=1
+      fi
+    done
+    if [[ "${VALUES[READMIN_PANEL_HOST]}" == "${VALUES[READMIN_API_HOST]}" ]]; then
+      warn "The panel and the API need different hostnames — the panel calls the API cross-origin."
+      local_bad=1
+    fi
+    (( local_bad == 0 )) && break
+    { (( NON_INTERACTIVE )) || ! have_tty; } && die "Two distinct hostnames are required for HTTPS."
+  done
+  # nginx terminates TLS on 443 and proxies to the local ports, so the public
+  # URLs carry no port.
+  set_var NEXT_PUBLIC_PANEL_URL "https://${VALUES[READMIN_PANEL_HOST]}"
+  set_var NEXT_PUBLIC_API_URL "https://${VALUES[READMIN_API_HOST]}"
+  note "Let's Encrypt emails you before a certificate expires. Renewal is automatic."
+  ask_var READMIN_TLS_EMAIL "Email for expiry notices (blank to register without one)" "" --optional
+  ok "Panel ${VALUES[NEXT_PUBLIC_PANEL_URL]} · API ${VALUES[NEXT_PUBLIC_API_URL]}"
+else
+  ask_url_var NEXT_PUBLIC_PANEL_URL "Public URL of the panel" "http://${PUBLIC_IP}:${PANEL_PORT}"
+  ask_url_var NEXT_PUBLIC_API_URL "Public URL of the API" "http://${PUBLIC_IP}:${API_PORT}"
+fi
 
 printf '\n  %s— MongoDB and Redis —%s\n' "$BOLD" "$RESET"
 ask_url_var MONGODB_URI "MongoDB connection string" "mongodb://127.0.0.1:27017" --secret
@@ -772,6 +829,10 @@ NGINX_OUT="$APP_DIR/deploy/nginx/readmin.generated.conf"
 
 url_has_port() { [[ "$(sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##' <<<"$1")" =~ ^[^/]+:[0-9]+ ]]; }
 
+# Set only when certbot reports success, so the closing summary never claims
+# HTTPS is live when it is not.
+TLS_ISSUED=0
+
 step "Reverse proxy"
 if [[ "$PANEL_HOST" == "$API_HOST" ]]; then
   note "Panel and API share a hostname, so there is nothing sensible to proxy."
@@ -785,19 +846,139 @@ else
       -e "s#__PANEL_PORT__#$PANEL_PORT#g" \
       -e "s#__API_PORT__#$API_PORT#g" \
       "$APP_DIR/deploy/nginx/readmin.conf" > "$NGINX_OUT"
+  # A host with IPv6 disabled cannot bind [::], and nginx fails its config test
+  # outright rather than skipping the line — so drop it when there is no IPv6.
+  if [[ ! -e /proc/net/if_inet6 ]]; then
+    sed -i '/listen \[::\]/d' "$NGINX_OUT"
+    note "No IPv6 on this host — removed the IPv6 listen directives."
+  fi
   ok "nginx config written to $NGINX_OUT"
-  if command -v nginx >/dev/null 2>&1 && confirm "Install it into nginx and reload?"; then
+
+  WANT_TLS=0
+  [[ "${VALUES[READMIN_TLS]:-false}" == "true" ]] && WANT_TLS=1
+
+  # With HTTPS chosen the .env already says https://, so nginx is not optional —
+  # without it nothing serves those URLs at all.
+  if ! command -v nginx >/dev/null 2>&1; then
+    if (( WANT_TLS )) || confirm "nginx is not installed. Install it now?"; then
+      info "Installing nginx ..."
+      install_packages nginx || warn "Could not install nginx."
+    fi
+  fi
+
+  if command -v nginx >/dev/null 2>&1 && { (( WANT_TLS )) || confirm "Install this config into nginx and reload?"; }; then
     as_root cp "$NGINX_OUT" /etc/nginx/sites-available/readmin
     as_root ln -sf /etc/nginx/sites-available/readmin /etc/nginx/sites-enabled/readmin
-    if as_root nginx -t; then
-      as_root systemctl reload nginx
-      ok "nginx reloaded"
-      note "Add TLS next: sudo certbot --nginx -d $PANEL_HOST -d $API_HOST"
+    # Debian ships a default site on port 80 that would answer first for any
+    # name it also matches; drop it so our server_names win.
+    [[ -e /etc/nginx/sites-enabled/default ]] && as_root rm -f /etc/nginx/sites-enabled/default
+    if as_root nginx -t >/dev/null 2>&1; then
+      # Same guard as the services step: containers ship systemctl without
+      # running systemd, where every call fails with "Host is down".
+      if [[ -d /run/systemd/system ]]; then
+        as_root systemctl enable --quiet nginx 2>/dev/null || true
+        if as_root systemctl reload nginx 2>/dev/null || as_root systemctl restart nginx 2>/dev/null; then
+          ok "nginx serving $PANEL_HOST and $API_HOST on port 80"
+        else
+          warn "nginx would not start — check: systemctl status nginx"
+          WANT_TLS=0
+        fi
+      else
+        warn "systemd is not running here, so nginx was not started."
+        note "Config is installed; start nginx yourself, then run certbot."
+        WANT_TLS=0
+      fi
     else
-      warn "nginx rejected the config; left it in place for you to fix."
+      warn "nginx rejected the config:"
+      as_root nginx -t 2>&1 | while IFS= read -r line; do note "  $line"; done
+      WANT_TLS=0
     fi
   else
     note "Install it by hand — the header of that file has the commands."
+    WANT_TLS=0
+  fi
+
+  # ── certificates ────────────────────────────────────────────────────────────
+  if (( WANT_TLS )); then
+    step "HTTPS certificates"
+
+    if ! command -v certbot >/dev/null 2>&1; then
+      info "Installing certbot ..."
+      case "$PKG" in
+        apt-get) install_packages certbot python3-certbot-nginx || true ;;
+        dnf|yum) install_packages certbot python3-certbot-nginx || true ;;
+      esac
+    fi
+
+    if ! command -v certbot >/dev/null 2>&1; then
+      warn "certbot could not be installed. The panel is built for https:// but"
+      note "nothing is serving TLS yet. Install certbot, then run:"
+      note "  sudo certbot --nginx -d $PANEL_HOST -d $API_HOST"
+    else
+      # Let's Encrypt validates over port 80 from outside. A host firewall that
+      # blocks it fails the challenge with a confusing timeout, so clear it first.
+      if command -v ufw >/dev/null 2>&1 && as_root ufw status 2>/dev/null | grep -q "Status: active"; then
+        if ! as_root ufw status 2>/dev/null | grep -qE "^(80|443)[/ ]|Nginx Full"; then
+          warn "ufw is active and does not appear to allow HTTP/HTTPS."
+          if confirm "Allow ports 80 and 443 through ufw?"; then
+            as_root ufw allow 80/tcp >/dev/null 2>&1 || true
+            as_root ufw allow 443/tcp >/dev/null 2>&1 || true
+            ok "ufw now allows 80 and 443"
+          else
+            warn "Leaving ufw as is — the certificate request will likely time out."
+          fi
+        fi
+      fi
+
+      # Let's Encrypt reaches this box over the public internet on port 80. If
+      # DNS is wrong the challenge fails, so say so before spending a rate limit.
+      dns_ok=1
+      for host in "$PANEL_HOST" "$API_HOST"; do
+        resolved="$(getent ahostsv4 "$host" 2>/dev/null | awk '{print $1; exit}')"
+        if [[ -z "$resolved" ]]; then
+          warn "$host does not resolve yet."
+          dns_ok=0
+        elif [[ -n "$PUBLIC_IP" && "$resolved" != "$PUBLIC_IP" ]]; then
+          warn "$host resolves to $resolved, but this server looks like $PUBLIC_IP."
+          dns_ok=0
+        else
+          ok "$host → $resolved"
+        fi
+      done
+
+      if (( dns_ok == 0 )); then
+        warn "DNS is not pointing here yet, so the certificate request would fail."
+        note "Point both names at this server, wait for propagation, then run:"
+        note "  sudo certbot --nginx -d $PANEL_HOST -d $API_HOST"
+      else
+        certbot_args=(--nginx -d "$PANEL_HOST" -d "$API_HOST"
+                      --non-interactive --agree-tos --redirect --keep-until-expiring)
+        if [[ -n "${VALUES[READMIN_TLS_EMAIL]:-}" ]]; then
+          certbot_args+=(-m "${VALUES[READMIN_TLS_EMAIL]}")
+        else
+          certbot_args+=(--register-unsafely-without-email)
+        fi
+
+        info "Requesting certificates from Let's Encrypt ..."
+        if as_root certbot "${certbot_args[@]}"; then
+          TLS_ISSUED=1
+          ok "HTTPS live on $PANEL_HOST and $API_HOST, with HTTP redirecting to it"
+          # certbot installs its own systemd timer or cron job; confirm one exists
+          # rather than claiming renewal works.
+          if as_root systemctl list-timers 2>/dev/null | grep -q certbot \
+             || [[ -e /etc/cron.d/certbot ]]; then
+            ok "Automatic renewal is scheduled (certbot renew)"
+          else
+            warn "No renewal timer found — add one, or certificates lapse in 90 days."
+          fi
+        else
+          warn "certbot failed. The panel is built for https:// but TLS is not up."
+          note "Common causes: port 80 blocked by a firewall, DNS not propagated,"
+          note "or Let's Encrypt rate limits. Retry with:"
+          note "  sudo certbot --nginx -d $PANEL_HOST -d $API_HOST"
+        fi
+      fi
+    fi
   fi
 fi
 
@@ -820,7 +1001,16 @@ if (( SERVICES_INSTALLED )); then
 fi
 
 printf '\n  %sStill to do by hand%s\n' "$BOLD" "$RESET"
-info "1. Point $PANEL_HOST and $API_HOST at this server, then add TLS (certbot)."
+if [[ "${VALUES[READMIN_TLS]:-false}" == "true" ]]; then
+  if (( TLS_ISSUED )); then
+    info "1. HTTPS is live — nothing to do. Certificates renew automatically."
+  else
+    info "1. Point $PANEL_HOST and $API_HOST at this server, then finish TLS:"
+    info "     sudo certbot --nginx -d $PANEL_HOST -d $API_HOST"
+  fi
+else
+  info "1. Point $PANEL_HOST and $API_HOST at this server, then add TLS (certbot)."
+fi
 info "2. Add your Roblox OAuth redirect URI: ${VALUES[NEXT_PUBLIC_PANEL_URL]}/auth/roblox"
 info "3. Add BOTH Discord redirect URIs (Discord matches them exactly):"
 info "     ${VALUES[NEXT_PUBLIC_PANEL_URL]}/auth/discord              login + account linking"
