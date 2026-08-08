@@ -60,10 +60,23 @@ tracked by git.
 | `--skip-node` / `--skip-deps` / `--skip-build` / `--skip-services` | Skip that stage |
 | `--service-user USER` | Run the services as `USER` (default: whoever owns the checkout) |
 
-**It does not do everything.** You still have to point DNS at the box, add TLS
-(`sudo certbot --nginx -d panel.example.com -d api.example.com`), register the OAuth redirect URIs
-it prints, and publish your own copies of the in-game Roblox modules ([§6.1](#61-the-in-game-roblox-modules)).
-The rest of this document explains what the installer is asking you for and why.
+### HTTPS
+
+The installer offers Let's Encrypt certificates and, if you accept, installs nginx, requests them and
+turns on the HTTP→HTTPS redirect. Point two hostnames at the server **first** — it checks DNS before
+asking Let's Encrypt for anything, since a failed challenge costs a rate limit.
+
+It asks before writing `.env`, not after, because the answer decides whether the URLs baked into the
+panel at build time say `http://` or `https://`. Answering later would mean building twice.
+
+Say no and you get plain HTTP on `http://<ip>:3000`. That works for a look around, but **Discord and
+Roblox OAuth generally refuse bare-IP redirect URIs**, so logins will not work, and session cookies
+travel unencrypted. Re-run the installer with two hostnames whenever you are ready.
+
+**It still does not do everything.** You have to point DNS at the box before running it, register the
+OAuth redirect URIs it prints, and publish your own copies of the in-game Roblox modules
+([§6.1](#61-the-in-game-roblox-modules)). The rest of this document explains what the installer is
+asking you for and why.
 
 ---
 

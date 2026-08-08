@@ -430,7 +430,7 @@ export default function DashboardPage({ shuttingDown }: { shuttingDown: boolean 
                   'group:read',
                   'group:write',
                   'legacy-group:manage'
-                ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURI(`${getBaseUrl()}/auth/roblox`)}&state=workspaceCreateLink:${group?.group.id}`}
+                ].map(scope => encodeURIComponent(scope)).join('+')}&step=accountConfirm&redirect_uri=${encodeURIComponent(`${getBaseUrl()}/auth/roblox`)}&state=workspaceCreateLink:${group?.group.id}`}
               >
                 Link Roblox integration
               </Button>
