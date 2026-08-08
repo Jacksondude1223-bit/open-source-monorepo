@@ -143,8 +143,11 @@ same `src/services` layer and therefore need the same environment.
 | **File storage** — this server's disk, or an S3-compatible bucket | **Yes** (disk needs no account) | Uploads: logos, banners, note/feed/session images, workspace export bundles ([storage/](src/services/storage)) | `STORAGE_DRIVER`, then either `STORAGE_LOCAL_PATH` or the `CDN_*` set |
 | **OpenSearch** (DO Managed OpenSearch) | Optional | Fast Roblox user search + in-game chat search. When `OPENSEARCH_URL` is unset every helper is a no-op and callers fall back to MongoDB ([opensearch.service.ts](src/services/opensearch.service.ts)) | `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` |
 
-**MongoDB.** The client forces `ssl: true` / `tls: true`, so the URI must be a TLS-capable
-`mongodb+srv://` (or `mongodb://…?tls=true`) connection string. DO Managed MongoDB satisfies this.
+**MongoDB.** TLS comes from the connection string: `mongodb+srv://` enables it by default (DO
+Managed MongoDB and every other managed provider hand you one of these), `mongodb://…?tls=true` opts
+in explicitly, and a plain `mongodb://127.0.0.1:27017` runs without it — which is what a mongod on
+the same box as the panel expects. The client used to force TLS on regardless, so that last case
+failed every connection and surfaced as `Topology is closed` on the first query.
 `MONGODB_DATABASE` is the database name (`readmin` on the hosted production instance — pick your own
 when self-hosting, since `readmin` is one of the signals used to identify the hosted deployment).
 Add the App Platform components to the database's **trusted sources**.

@@ -3,13 +3,20 @@ import { env } from "~/services/env";
 import * as MongoTypes from "./NewMongoTypes";
 export { MongoTypes };
 
+/**
+ * TLS is decided by the connection string, not forced here.
+ *
+ * `mongodb+srv://` turns it on by default — which is what every managed provider
+ * hands you — and `mongodb://…?tls=true` opts in explicitly. A mongod running on
+ * the same box as the panel speaks no TLS at all, so forcing it made the obvious
+ * self-hosted setup, `mongodb://127.0.0.1:27017`, fail every connection attempt
+ * and surface as "Topology is closed" on the first query.
+ */
 export const mongoClient = new MongoClient(env.MONGODB_URI, {
     appName: `${env.APP_NAME}-${env.NODE_ENV}`,
     retryReads: true,
     retryWrites: true,
     serverSelectionTimeoutMS: 30000,
-    ssl: true,
-    tls: true,
 });
 
 // Replace single connect() with robust retry logic

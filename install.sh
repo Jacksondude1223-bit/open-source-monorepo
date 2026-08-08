@@ -720,6 +720,45 @@ as_root chown "$SERVICE_USER":"$SERVICE_GROUP" "$ENV_FILE"
 as_root chmod 600 "$ENV_FILE"
 ok "Wrote $ENV_FILE (0600, owned by $SERVICE_USER)"
 
+# ── data store reachability ───────────────────────────────────────────────────
+# MongoDB and Redis are prerequisites this installer does not provide. Nothing
+# notices they are missing until the first query, which surfaces deep in the UI
+# as "Topology is closed" — so check now, while the URI is on screen.
+probe_tcp() { # probe_tcp <host> <port>
+  timeout 3 bash -c ": >/dev/tcp/$1/$2" 2>/dev/null
+}
+
+check_store() { # check_store <label> <uri> <default-port>
+  local label="$1" uri="$2" default_port="$3"
+  # A +srv URI resolves through DNS SRV records to hosts we cannot guess; skip.
+  [[ "$uri" == *+srv://* ]] && return 0
+  local hostport host port
+  hostport="$(sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#^[^@]*@##; s#[/?].*$##; s#,.*$##' <<<"$uri")"
+  host="${hostport%%:*}"
+  port="${hostport##*:}"
+  [[ "$port" == "$host" ]] && port="$default_port"
+  [[ -z "$host" ]] && return 0
+  if probe_tcp "$host" "$port"; then
+    ok "$label reachable at $host:$port"
+  else
+    warn "$label is NOT reachable at $host:$port"
+    return 1
+  fi
+}
+
+step "Checking the data stores"
+STORES_OK=1
+check_store "MongoDB" "${VALUES[MONGODB_URI]}" 27017 || STORES_OK=0
+check_store "Redis"   "${VALUES[REDIS_URL]}"   6379  || STORES_OK=0
+
+if (( STORES_OK == 0 )); then
+  warn "The panel cannot work without these. This installer does not install them."
+  note "On Ubuntu/Debian, for a single-box setup:"
+  note "  MongoDB — follow https://www.mongodb.com/docs/manual/administration/install-on-linux/"
+  note "  Redis   — sudo apt install redis-server && sudo systemctl enable --now redis-server"
+  note "Then re-run this installer. Continuing anyway — the build does not need them."
+fi
+
 # ── local storage directory ───────────────────────────────────────────────────
 # Substituted into the systemd units' ReadWritePaths. Points at the app dir when
 # storage is remote, so the directive always names something that exists.
