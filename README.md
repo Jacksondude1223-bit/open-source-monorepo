@@ -138,10 +138,16 @@ same `src/services` layer and therefore need the same environment.
 
 | Service | Required? | What it's for | Env vars |
 | --- | --- | --- | --- |
-| **MongoDB** (DO Managed MongoDB) | **Yes** | Primary datastore — every collection in [mongo.service.ts](src/services/mongo.service.ts#L90) | `MONGODB_URI`, `MONGODB_DATABASE` |
-| **Valkey / Redis** (DO Managed Caching) | **Yes** | Cross-process OAuth refresh locking and caching ([redis.client.ts](src/services/redis.client.ts), [cache.service.ts](src/services/cache.service.ts)) | `REDIS_URL` |
+| **MongoDB** (managed, or local — see below) | **Yes** | Primary datastore — every collection in [mongo.service.ts](src/services/mongo.service.ts#L90) | `MONGODB_URI`, `MONGODB_DATABASE` |
+| **Valkey / Redis** (managed, or local) | **Yes** | Cross-process OAuth refresh locking and caching ([redis.client.ts](src/services/redis.client.ts), [cache.service.ts](src/services/cache.service.ts)) | `REDIS_URL` |
 | **File storage** — this server's disk, or an S3-compatible bucket | **Yes** (disk needs no account) | Uploads: logos, banners, note/feed/session images, workspace export bundles ([storage/](src/services/storage)) | `STORAGE_DRIVER`, then either `STORAGE_LOCAL_PATH` or the `CDN_*` set |
 | **OpenSearch** (DO Managed OpenSearch) | Optional | Fast Roblox user search + in-game chat search. When `OPENSEARCH_URL` is unset every helper is a no-op and callers fall back to MongoDB ([opensearch.service.ts](src/services/opensearch.service.ts)) | `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD` |
+
+**Both can live on the same box.** `install.sh` checks that `MONGODB_URI` and `REDIS_URL` actually
+answer, and when they name this machine and nothing is listening it offers to install them —
+MongoDB from its own apt/yum repository (neither Debian nor Ubuntu packages it), Redis from the
+distro. Both bind to loopback only, so nothing is exposed. A URI pointing somewhere else is left
+alone: an unreachable remote database is not something the installer can fix.
 
 **MongoDB.** TLS comes from the connection string: `mongodb+srv://` enables it by default (DO
 Managed MongoDB and every other managed provider hand you one of these), `mongodb://…?tls=true` opts

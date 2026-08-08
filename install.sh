@@ -728,15 +728,22 @@ probe_tcp() { # probe_tcp <host> <port>
   timeout 3 bash -c ": >/dev/tcp/$1/$2" 2>/dev/null
 }
 
+# Strip scheme, credentials, path and any extra seed hosts, leaving host[:port].
+store_authority() { sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#^[^@]*@##; s#[/?].*$##; s#,.*$##' <<<"$1"; }
+store_host() { local a; a="$(store_authority "$1")"; printf '%s' "${a%%:*}"; }
+store_port() { # store_port <uri> <default>
+  local a p; a="$(store_authority "$1")"; p="${a##*:}"
+  [[ "$p" == "$a" ]] && p="$2"
+  printf '%s' "$p"
+}
+
 check_store() { # check_store <label> <uri> <default-port>
   local label="$1" uri="$2" default_port="$3"
   # A +srv URI resolves through DNS SRV records to hosts we cannot guess; skip.
   [[ "$uri" == *+srv://* ]] && return 0
-  local hostport host port
-  hostport="$(sed -E 's#^[a-zA-Z][a-zA-Z0-9+.-]*://##; s#^[^@]*@##; s#[/?].*$##; s#,.*$##' <<<"$uri")"
-  host="${hostport%%:*}"
-  port="${hostport##*:}"
-  [[ "$port" == "$host" ]] && port="$default_port"
+  local host port
+  host="$(store_host "$uri")"
+  port="$(store_port "$uri" "$default_port")"
   [[ -z "$host" ]] && return 0
   if probe_tcp "$host" "$port"; then
     ok "$label reachable at $host:$port"
@@ -746,17 +753,111 @@ check_store() { # check_store <label> <uri> <default-port>
   fi
 }
 
+is_loopback_host() { [[ "$1" == "localhost" || "$1" == "127.0.0.1" || "$1" == "::1" ]]; }
+
+# Enable and start a unit, saying plainly when there is no systemd to do it —
+# otherwise the package installs and the follow-up probe fails for a reason the
+# output never mentions.
+start_service() { # start_service <unit>
+  if [[ ! -d /run/systemd/system ]]; then
+    warn "systemd is not running here, so $1 was installed but not started."
+    return 0
+  fi
+  as_root systemctl enable --now "$1" 2>/dev/null || warn "$1 installed but would not start — check: systemctl status $1"
+}
+
+# Host distro, for the MongoDB apt repository which is per-release.
+os_id() { sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | tr -d '"'; }
+os_codename() { sed -n 's/^VERSION_CODENAME=//p' /etc/os-release 2>/dev/null | tr -d '"'; }
+
+install_mongodb() {
+  local id codename
+  id="$(os_id)"; codename="$(os_codename)"
+  case "$PKG" in
+    apt-get)
+      # Ubuntu and Debian do not package MongoDB, so its own repository is the
+      # only supported route. The keyring and list are per major version.
+      if [[ "$id" != "ubuntu" && "$id" != "debian" ]] || [[ -z "$codename" ]]; then
+        warn "Unrecognised apt distro ($id ${codename:-?}) — install MongoDB by hand:"
+        note "  https://www.mongodb.com/docs/manual/administration/install-on-linux/"
+        return 1
+      fi
+      info "Adding the MongoDB $MONGO_MAJOR repository for $id/$codename ..."
+      as_root install -m 0755 -d /usr/share/keyrings
+      if ! curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGO_MAJOR}.asc" \
+           | as_root gpg --batch --yes --dearmor -o "/usr/share/keyrings/mongodb-server-${MONGO_MAJOR}.gpg"; then
+        warn "Could not fetch the MongoDB signing key."
+        return 1
+      fi
+      local component="multiverse"
+      [[ "$id" == "debian" ]] && component="main"
+      echo "deb [ arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mongodb-server-${MONGO_MAJOR}.gpg ] https://repo.mongodb.org/apt/${id} ${codename}/mongodb-org/${MONGO_MAJOR} ${component}" \
+        | as_root tee "/etc/apt/sources.list.d/mongodb-org-${MONGO_MAJOR}.list" >/dev/null
+      install_packages mongodb-org || { warn "MongoDB packages failed to install."; return 1; }
+      ;;
+    dnf|yum)
+      as_root tee "/etc/yum.repos.d/mongodb-org-${MONGO_MAJOR}.repo" >/dev/null <<REPO
+[mongodb-org-${MONGO_MAJOR}]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/${MONGO_MAJOR}/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-${MONGO_MAJOR}.asc
+REPO
+      install_packages mongodb-org || { warn "MongoDB packages failed to install."; return 1; }
+      ;;
+    *) return 1 ;;
+  esac
+  start_service mongod
+  return 0
+}
+
+install_redis() {
+  case "$PKG" in
+    apt-get) install_packages redis-server || return 1; start_service redis-server ;;
+    dnf|yum) install_packages redis || return 1; start_service redis ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
+
 step "Checking the data stores"
+MONGO_MAJOR="${READMIN_MONGO_MAJOR:-8.0}"
+MONGO_HOST="$(store_host "${VALUES[MONGODB_URI]}" 27017)"; MONGO_PORT="$(store_port "${VALUES[MONGODB_URI]}" 27017)"
+REDIS_HOST="$(store_host "${VALUES[REDIS_URL]}" 6379)";     REDIS_PORT="$(store_port "${VALUES[REDIS_URL]}" 6379)"
+
 STORES_OK=1
 check_store "MongoDB" "${VALUES[MONGODB_URI]}" 27017 || STORES_OK=0
 check_store "Redis"   "${VALUES[REDIS_URL]}"   6379  || STORES_OK=0
 
 if (( STORES_OK == 0 )); then
-  warn "The panel cannot work without these. This installer does not install them."
-  note "On Ubuntu/Debian, for a single-box setup:"
-  note "  MongoDB — follow https://www.mongodb.com/docs/manual/administration/install-on-linux/"
+  # Only offer to install what is supposed to live on this machine. A URI naming
+  # somewhere else is unreachable for a reason we cannot fix from here.
+  WANT_MONGO=0; WANT_REDIS=0
+  { [[ "${VALUES[MONGODB_URI]}" != *+srv://* ]] && is_loopback_host "$MONGO_HOST" \
+      && ! probe_tcp "$MONGO_HOST" "$MONGO_PORT"; } && WANT_MONGO=1
+  { is_loopback_host "$REDIS_HOST" && ! probe_tcp "$REDIS_HOST" "$REDIS_PORT"; } && WANT_REDIS=1
+
+  if (( WANT_MONGO || WANT_REDIS )); then
+    info "Your URIs point at this machine, so these can be installed here."
+    note "Both bind to localhost only — nothing is exposed to the internet."
+    if confirm "Install the missing data store(s) now?"; then
+      (( WANT_MONGO )) && { install_mongodb && ok "MongoDB installed" || warn "MongoDB install failed."; }
+      (( WANT_REDIS )) && { install_redis   && ok "Redis installed"   || warn "Redis install failed."; }
+      # Give the daemons a moment to bind before re-checking.
+      sleep 3
+      STORES_OK=1
+      check_store "MongoDB" "${VALUES[MONGODB_URI]}" 27017 || STORES_OK=0
+      check_store "Redis"   "${VALUES[REDIS_URL]}"   6379  || STORES_OK=0
+    fi
+  fi
+fi
+
+if (( STORES_OK == 0 )); then
+  warn "The panel cannot work until both are reachable."
+  note "  MongoDB — https://www.mongodb.com/docs/manual/administration/install-on-linux/"
   note "  Redis   — sudo apt install redis-server && sudo systemctl enable --now redis-server"
-  note "Then re-run this installer. Continuing anyway — the build does not need them."
+  note "Continuing anyway — the build itself does not need them."
 fi
 
 # ── local storage directory ───────────────────────────────────────────────────
