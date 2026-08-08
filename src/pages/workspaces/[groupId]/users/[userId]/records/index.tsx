@@ -38,6 +38,7 @@ import Modal from '~/components/ui/Modal';
 import StatCard from '~/components/ui/StatCard';
 import TextReturnForUserId from '~/components/ui/TextReturnForUserId';
 import { trpc } from '~/utils/trpc';
+import { BRAND_NAME } from '~/utils/brand';
 
 function SectionHeader({
   title,
@@ -721,7 +722,7 @@ export default function DashboardPage() {
     <>
       <Head>
         <title>
-          {workspace?.premium?.is ? '' : 'ReAdmin '}
+          {workspace?.premium?.is ? '' : `${BRAND_NAME} `}
           {workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Records
         </title>
       </Head>

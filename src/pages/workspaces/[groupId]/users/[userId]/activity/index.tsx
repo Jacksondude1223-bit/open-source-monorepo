@@ -24,6 +24,7 @@ import JSONPretty from 'react-json-pretty';
 import Line from '~/components/NextGenStyles/Line';
 import StatCard from '~/components/ui/StatCard';
 import { ClockIcon, BoltIcon, MoonIcon, ChatBubbleBottomCenterTextIcon, ChatBubbleLeftRightIcon, CalendarIcon, TrophyIcon, CheckBadgeIcon, ChartBarIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
+import { BRAND_NAME } from '~/utils/brand';
 
 export function SuspicouslyNumberLikeToString(number: any, isTime = true) {
   if (isTime == false) {
@@ -134,7 +135,7 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Activity</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Activity</title>
       </Head>
 
       <div className='animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out'>

@@ -20,6 +20,7 @@ import ReactTimeago from 'react-timeago';
 import CreateEmployeeHistoryModal from '~/components/page_components/workspaces/employee-history/CreateHistory.modal';
 import { Dialog, DialogContent, DialogTitle, Fab } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import { BRAND_NAME } from '~/utils/brand';
 
 /**
  * Evidence attached to a history record.
@@ -153,7 +154,7 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Write Ups</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName || ''} {userInfo?.robloxInfo?.name || ''} Write Ups</title>
       </Head>
 
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 ease-out">

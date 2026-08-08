@@ -15,7 +15,7 @@ import Link from 'next/link';
 import JSONPretty from 'react-json-pretty';
 import LoadingPage from '../layouts/LoadingPage';
 import PageSkeleton from '~/components/ui/PageSkeleton';
-import { BRAND_WORDMARK_DARK } from '~/utils/brand';
+import { BRAND_NAME, BRAND_WORDMARK_DARK } from '~/utils/brand';
 
 type DefaultLayoutProps = { children: ReactNode, disableMl?: boolean };
 
@@ -82,7 +82,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
         navigation={[{ name: 'Back to Dashboard', href: '/dashboard', icon: HomeIcon, current: false }]}
       >
         <Head>
-          <title>ReAdmin</title>
+          <title>{BRAND_NAME}</title>
           <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
@@ -98,7 +98,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
         navigation={[{ name: 'Back to Dashboard', href: '/dashboard', icon: HomeIcon, current: false }]}
       >
         <Head>
-          <title>ReAdmin</title>
+          <title>{BRAND_NAME}</title>
           <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
@@ -159,7 +159,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
         navigation={[{ name: 'Back to Dashboard', href: '/dashboard', icon: HomeIcon, current: false }]}
       >
         <Head>
-          <title>ReAdmin</title>
+          <title>{BRAND_NAME}</title>
           <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
@@ -357,7 +357,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
         navigation={[{ name: 'Back to Dashboard', href: '/dashboard', icon: HomeIcon, current: false }]}
       >
         <Head>
-          <title>ReAdmin</title>
+          <title>{BRAND_NAME}</title>
           <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
         </Head>
 
@@ -389,7 +389,7 @@ export const WorkspaceLayout = ({ children, disableMl }: DefaultLayoutProps) => 
       navigation={nav}
     >
       <Head>
-        <title>{workspace?.premium?.is ? '' : 'ReAdmin '}{workspace?.groupName} {nav.find(p => p.current)?.name || ''}</title>
+        <title>{workspace?.premium?.is ? '' : `${BRAND_NAME} `}{workspace?.groupName} {nav.find(p => p.current)?.name || ''}</title>
         <link rel="icon" href={workspaceLogo || BRAND_WORDMARK_DARK} />
       </Head>
 

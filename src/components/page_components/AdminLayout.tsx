@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import AuthedLayout from '~/components/layouts/PageLayout';
 import { useUser } from '~/components/contexts/user';
 import { UsersIcon, ServerStackIcon, BellIcon, BoltIcon, ChartBarIcon, BriefcaseIcon, DocumentTextIcon, FlagIcon } from '@heroicons/react/20/solid';
-import { BRAND_WORDMARK_DARK } from '~/utils/brand';
+import { BRAND_NAME, BRAND_WORDMARK_DARK } from '~/utils/brand';
 
 type DefaultLayoutProps = { children: ReactNode };
 
@@ -81,7 +81,7 @@ export const AdminLayout = ({ children }: DefaultLayoutProps) => {
   return (
     <AuthedLayout navigation={adminNavigation}>
       <Head>
-        <title>ReAdmin - Admin Panel</title>
+        <title>{`${BRAND_NAME} - Admin Panel`}</title>
         <link rel="icon" href={BRAND_WORDMARK_DARK} />
       </Head>
 
